@@ -130,6 +130,7 @@ const I = {
   eye: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1.5 12S5.5 4.5 12 4.5 22.5 12 22.5 12 18.5 19.5 12 19.5 1.5 12 1.5 12z"/><g class="lid"><circle cx="12" cy="12" r="3.2"/></g><path class="slash" d="M3 3l18 18"/></svg>',
 };
 const PAGES = [["mes", "Mês"], ["lanc", "Lançamentos"], ["cartoes", "Cartões"], ["pessoas", "Pessoas"], ["futuro", "Futuro"], ["ajustes", "Ajustes"]];
+const SHORT = { lanc: "Extrato" };
 
 /* ---------- utilidades de UI ---------- */
 let toastT;
@@ -158,12 +159,14 @@ function applyTheme() {
   const meta = document.querySelector('meta[name="theme-color"]'); if (meta) meta.content = css("--side");
 }
 function openSheet(html, bind) {
+  Controls.close();
   const sh = $("#sheet"); sh.innerHTML = html; sh.hidden = false;
-  const first = sh.querySelector("[autofocus]") || sh.querySelector("input,select,button");
+  Controls.enhance(sh);
+  const first = sh.querySelector("[autofocus]") || sh.querySelector("input:not(.cx-hidden),.cselect,button");
   if (first && matchMedia("(pointer:fine)").matches) first.focus();
   bind?.(sh);
 }
-const closeSheet = () => { $("#sheet").hidden = true; };
+const closeSheet = () => { Controls.close(); $("#sheet").hidden = true; };
 $("#sheet").addEventListener("click", e => { if (e.target.id === "sheet") closeSheet(); });
 addEventListener("keydown", e => { if (e.key === "Escape") closeSheet(); });
 function segBind(el, attr, fn) { el.onclick = e => { const b = e.target.closest("button"); if (!b || !el.contains(b)) return; el.querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", x === b)); fn(b.dataset[attr]); }; }
@@ -176,7 +179,8 @@ function confirmBox(title, text, okLabel, onOk) {
 /* ---------- shell ---------- */
 function navs() {
   const h = PAGES.map(([id, t]) => `<button class="navbtn" data-p="${id}" aria-current="${page === id}">${I[id]}<span>${t}</span></button>`).join("");
-  $("#sidenav").innerHTML = h; $("#bottomnav").innerHTML = h;
+  $("#sidenav").innerHTML = h;
+  $("#bottomnav").innerHTML = PAGES.map(([id, t]) => `<button class="navbtn" data-p="${id}" aria-current="${page === id}" aria-label="${t}">${I[id]}<span>${SHORT[id] || t}</span></button>`).join("");
   $("#who").textContent = Store.user?.email || "";
 }
 document.addEventListener("click", e => {
@@ -198,6 +202,7 @@ function render() {
   ({ mes: pgMes, lanc: pgLanc, cartoes: pgCartoes, pessoas: pgPessoas, futuro: pgFuturo, ajustes: pgAjustes })[page]();
   if (animate) { v.querySelectorAll(".anim").forEach(g => [...g.children].forEach((c, i) => c.style.setProperty("--i", i))); countUp(); }
   else { v.querySelectorAll(".anim").forEach(g => g.classList.remove("anim")); window.scrollTo(0, keepY); }
+  Controls.enhance(v);
   animate = false;
 }
 $("#prev").onclick = () => { cur = addM(cur, -1); animate = true; render(); };
@@ -276,7 +281,7 @@ function pgLanc() {
      <p class="hint" style="margin-top:10px">Toque em um lançamento para editar ou excluir.</p></section>`;
   } else if (sub === "rec") {
     const grp = [["entrada", "Entradas fixas"], ["saida", "Contas e assinaturas"], ["invest", "Aportes"]];
-    body = `<section class="grid anim" style="margin-top:0">${grp.map(([t, h]) => { const l = S.recorrentes.filter(r => r.tipo === t); const ativos = l.filter(r => !r.fim || diffM(NOW, r.fim) >= 0);
+    body = `<section class="grid auto anim" style="margin-top:0">${grp.map(([t, h]) => { const l = S.recorrentes.filter(r => r.tipo === t); const ativos = l.filter(r => !r.fim || diffM(NOW, r.fim) >= 0);
       return `<div class="box c4"><h2>${h}<small class="money">${brl(ativos.reduce((s, r) => s + r.v, 0))}/mês</small></h2><div class="list">${l.map(r => `<div class="row" data-edit="rec:${r.id}" role="button" tabindex="0"><div class="ic" style="background:color-mix(in srgb,${cat(r.cat).cor} 16%,transparent)">${cat(r.cat).e}</div><div><div class="t">${esc(r.d)}</div><div class="m"><span class="dot" style="background:${conta(r.conta).cor}"></span>${esc(conta(r.conta).n)} · dia ${r.dia} · ${r.fim ? "até " + short(r.fim) : "desde " + short(r.inicio)}</div></div><div class="val"><span class="money">${brl(r.v)}</span></div><span></span></div>`).join("") || empty("🔁", "Nada aqui ainda.")}</div></div>`; }).join("")}</section>
       <p class="hint" style="margin-top:12px">Para criar, toque no botão <b>+</b> e escolha “Todo mês”. Toque num item para editar ou parar de repetir.</p>`;
   } else {
@@ -428,8 +433,10 @@ function pgAjustes() {
    <div class="box c6"><h2>Aparência e privacidade</h2>
     <div class="fld" style="margin-top:10px">Tema<div class="seg" id="themeSeg">${[["auto", "Automático"], ["light", "Claro"], ["dark", "Escuro"]].map(([k, t]) => `<button data-t="${k}" aria-pressed="${S.prefs.theme === k}">${t}</button>`).join("")}</div></div>
     <label class="pref"><input type="checkbox" id="privDef" ${S.prefs.priv ? "checked" : ""}> Esconder valores (o mesmo que o botão do olho 👁 no topo)</label></div>
-   <div class="box c6"><h2>Conta</h2><p class="hint">${Store.mode === "demo" ? "Você está no modo demonstração: os dados ficam só neste aparelho." : "Conectado como <b>" + esc(Store.user?.email) + "</b>. Seus dados são criptografados antes de sair do aparelho: nem o administrador consegue ler."}</p>
-    <div class="tools">${Store.mode === "cloud" ? '<button class="btn" id="chPw">Trocar senha</button>' : ""}<button class="btn" id="expBtn">Baixar backup</button><label class="btn" style="cursor:pointer">Restaurar backup<input type="file" id="impFile" accept="application/json" hidden></label><button class="btn" id="outBtn">${Store.mode === "demo" ? "Sair do demo" : "Sair"}</button></div>
+   <div class="box c6"><h2>Conta</h2><p class="hint">${Store.mode === "demo" ? "Você está no modo demonstração: os dados ficam só neste aparelho. Manter sessão e biometria só existem com uma conta online (criptografada)." : "Conectado como <b>" + esc(Store.user?.email) + "</b>. Seus dados são criptografados antes de sair do aparelho: nem o administrador consegue ler."}</p>
+    ${Store.mode === "cloud" ? `<label class="pref"><input type="checkbox" id="rememberChk" ${Store.remembered ? "checked" : ""}> Manter minha sessão neste aparelho (não pedir senha ao reabrir)</label>
+    <label class="pref" id="bioRow" style="display:none"><input type="checkbox" id="bioChk"> Entrar com biometria (Face ID / digital) neste aparelho</label>` : ""}
+    <div class="tools" style="margin-top:10px">${Store.mode === "cloud" ? '<button class="btn" id="chPw">Trocar senha</button>' : ""}<button class="btn" id="expBtn">Baixar backup</button><label class="btn" style="cursor:pointer">Restaurar backup<input type="file" id="impFile" accept="application/json" hidden></label><button class="btn" id="outBtn">${Store.mode === "demo" ? "Sair do demo" : "Sair"}</button></div>
     <div class="tools" style="margin-top:10px">${Store.mode === "demo" ? '<button class="btn" id="resetDemo">Recomeçar com dados de exemplo</button>' : ""}<button class="btn danger" id="wipe">Apagar todos os dados</button></div></div>
    <div class="box c12"><h2>Instalar no celular ou PC</h2><p class="hint" style="margin-bottom:0"><b>iPhone:</b> abra no Safari → botão Compartilhar → “Adicionar à Tela de Início”. <b>Android:</b> Chrome → menu ⋮ → “Instalar app”. <b>PC:</b> Chrome/Edge → ícone de instalar na barra de endereço.</p></div></section>`;
   const v = $("#view");
@@ -444,6 +451,15 @@ function pgAjustes() {
   $("#addConta").onclick = () => { S.contas.push({ id: uid(), n: "Novo cartão", cor: PAL[S.contas.length % PAL.length], tipo: "credito" }); commit("Cartão criado — digite o nome"); focusNew('[data-k="n"][data-conta]'); };
   segBind($("#themeSeg"), "t", t => { S.prefs.theme = t; commit(); });
   $("#privDef").onchange = e => { S.prefs.priv = e.target.checked; commit(); };
+  if ($("#rememberChk")) $("#rememberChk").onchange = e => { Store.setRemember(e.target.checked); toast(e.target.checked ? "Vai lembrar sua sessão neste aparelho" : "Vai pedir senha na próxima vez"); };
+  if ($("#bioRow")) Store.bioSupported().then(ok => {
+    if (!ok || !$("#bioRow")) return;
+    $("#bioRow").style.display = ""; const chk = $("#bioChk"); chk.checked = Store.bioEnabled(Store.user.email);
+    chk.onchange = async () => {
+      if (chk.checked) { try { await Store.bioEnroll(Store.user.email); toast("Biometria ativada"); } catch (e) { chk.checked = false; toast(/PRF/.test(e.message) ? "Este navegador ainda não suporta biometria aqui." : "Não foi possível ativar."); } }
+      else { Store.bioForget(Store.user.email); toast("Biometria desativada"); }
+    };
+  });
   $("#expBtn").onclick = () => { const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([JSON.stringify(S, null, 1)], { type: "application/json" })); a.download = "fluo-backup-" + today() + ".json"; a.click(); toast("Backup baixado"); };
   $("#impFile").onchange = async e => { try { const d = JSON.parse(await e.target.files[0].text()); if (!d.cats || !d.contas) throw 0; const snap = snapshot(); S = d; commit("Backup restaurado", restoreFrom(snap)); } catch (err) { toast("Arquivo inválido: escolha um backup do Fluo (.json)"); } };
   $("#outBtn").onclick = async () => { await Store.signOut(); S = null; showAuth(); };
@@ -562,57 +578,107 @@ function evoChart(id, from, to) {
 }
 
 /* ---------- login ---------- */
-Store.onRecoveryLink = () => showAuth("", "rec");
-function showAuth(msg, startMode) {
+/* ---------- login / pedido de conta / recuperação ----------
+   in: entrar · req: pedir acesso (vai para o e-mail do admin) · up: criar conta (só e-mail aprovado, via link ?criar=)
+   forgot: pede código por e-mail · code: código + nova senha + código de recuperação (destrava a criptografia) */
+function showAuth(msg, startMode, preEmail) {
   $("#appShell").hidden = true; $("#fab").hidden = true; $("#bottomnav").hidden = true; $("#authShell").hidden = false;
-  let mode = startMode || "in";
+  let mode = startMode || "in", email0 = preEmail || Store.user?.email || "";
+  const back = '<button type="button" class="linkbtn" data-m="in">← Voltar para entrar</button>';
+  const emailFld = (ro) => `<label class="fld">E-mail<input id="aEmail" type="email" required autocomplete="email" value="${esc(email0)}" ${ro ? "readonly" : ""}></label>`;
+  const rememberFld = `<label class="pref" style="margin-top:2px"><input type="checkbox" id="aRemember" checked> Manter minha sessão neste aparelho</label>`;
   const draw = () => {
-    const cloud = Store.cloudReady;
-    $("#authForm").innerHTML = mode === "rec" ? `
-      <h2>Recuperar acesso</h2><p class="hint">Para destravar seus dados criptografados, digite o <b>código de recuperação</b> que você guardou ao criar a conta.</p>
-      <label class="fld">Código de recuperação<input id="aCode" required placeholder="XXXX-XXXX-XXXX-XXXX-XXXX" autocomplete="off"></label>
-      <label class="fld">${Store.inRecovery ? "Crie uma nova senha" : "Sua senha atual"}<input id="aPw" type="password" required minlength="8" autocomplete="${Store.inRecovery ? "new-password" : "current-password"}"></label>
-      <div class="err" id="aErr"></div><button class="btn acc" style="padding:12px">Destravar</button>` : mode === "forgot" ? `
-      <h2>Esqueci a senha</h2><p class="hint">Enviaremos um link para criar uma nova senha. Depois você vai precisar do código de recuperação para abrir seus dados.</p>
-      <label class="fld">E-mail<input id="aEmail" type="email" required autocomplete="email"></label>
-      <div class="err" id="aErr"></div><button class="btn acc" style="padding:12px">Enviar link</button><button type="button" class="linkbtn" data-m="in">Voltar</button>` : `
-      <h2>${mode === "in" ? "Entrar" : "Criar conta"}</h2>
-      ${cloud ? `<label class="fld">E-mail<input id="aEmail" type="email" required autocomplete="email" value="${esc(Store.user?.email || "")}"></label>
-      <label class="fld">Senha<input id="aPw" type="password" required minlength="8" autocomplete="${mode === "in" ? "current-password" : "new-password"}"></label>
-      ${mode === "up" ? '<label class="fld">Repita a senha<input id="aPw2" type="password" required minlength="8" autocomplete="new-password"></label>' : ""}
-      <div class="err" id="aErr">${esc(msg || "")}</div>
-      <button class="btn acc" style="padding:12px" id="aGo">${mode === "in" ? "Entrar" : "Criar conta"}</button>
-      <button type="button" class="linkbtn" data-m="${mode === "in" ? "up" : "in"}">${mode === "in" ? "Não tem conta? Criar agora" : "Já tenho conta"}</button>
-      ${mode === "in" ? '<button type="button" class="linkbtn" data-m="forgot" style="color:var(--muted)">Esqueci a senha</button>' : ""}
-      <div style="display:flex;align-items:center;gap:10px;color:var(--muted);font-size:12px"><hr style="flex:1;border:0;border-top:1px solid var(--line)">ou<hr style="flex:1;border:0;border-top:1px solid var(--line)"></div>`
-      : `<p class="hint">O login online ainda não foi configurado neste endereço.</p>`}
-      <button type="button" class="btn" id="aDemo" style="padding:12px">Experimentar sem conta</button>
-      <p class="hint" style="font-size:12px">🔒 Seus dados são criptografados no seu aparelho antes de irem para a nuvem. Ninguém além de você consegue lê-los.</p>`;
-    document.querySelectorAll("[data-m]").forEach(b => b.onclick = () => { mode = b.dataset.m; msg = ""; draw(); });
+    const cloud = Store.cloudReady, E = `<div class="err" id="aErr">${esc(msg || "")}</div>`;
+    const V = {
+      bio: `<h2>Olá de novo</h2><p class="hint">Desbloqueie o Fluo de <b>${esc(email0)}</b>.</p>
+        <button type="button" class="btn acc" id="aBioGo" style="padding:16px;display:flex;gap:10px;justify-content:center;align-items:center;font-size:16px">👆 Desbloquear</button>
+        <div class="err" id="aErr">${esc(msg || "")}</div>
+        <button type="button" class="linkbtn" data-m="in" style="text-align:center">Usar senha</button>`,
+      req: `<h2>Pedir acesso</h2><p class="hint">O Fluo é fechado para amigos. Seu pedido vai para o administrador; quando ele aprovar, você recebe um e-mail para criar a senha.</p>
+        <label class="fld">Seu nome<input id="aName" required maxlength="80" autocomplete="name"></label>${emailFld()}
+        <label class="fld">Mensagem (opcional)<input id="aNote" maxlength="300" placeholder="Ex: sou o Lucas, amigo do trabalho"></label>
+        ${E}<button class="btn acc" style="padding:12px">Enviar pedido</button>${back}`,
+      sent: `<div class="empty" style="padding:6px"><div class="blob">📬</div></div><h2>Pedido enviado!</h2>
+        <p class="hint">Assim que for aprovado, chega um e-mail em <b>${esc(email0)}</b> com o link para criar sua senha. Confira também o spam.</p>${back}`,
+      up: `<h2>Criar sua conta</h2><p class="hint">Seu acesso foi aprovado. Crie uma senha com pelo menos 8 caracteres.</p>
+        ${emailFld()}<label class="fld">Senha<input id="aPw" type="password" required minlength="8" autocomplete="new-password"></label>
+        <label class="fld">Repita a senha<input id="aPw2" type="password" required minlength="8" autocomplete="new-password"></label>
+        ${rememberFld}${E}<button class="btn acc" style="padding:12px">Criar conta</button>${back}`,
+      forgot: `<h2>Esqueci a senha</h2><p class="hint">Vamos mandar um código de 6 dígitos para o seu e-mail.</p>${emailFld()}
+        ${E}<button class="btn acc" style="padding:12px">Enviar código</button>${back}`,
+      code: `<h2>Nova senha</h2><p class="hint">Digite o código que chegou em <b>${esc(email0)}</b>. Para abrir seus dados criptografados, também precisamos do <b>código de recuperação</b> que você guardou ao criar a conta.</p>
+        <label class="fld">Código do e-mail<input id="aOtp" required inputmode="numeric" maxlength="6" placeholder="000000" autocomplete="one-time-code" style="letter-spacing:6px;font-family:var(--mono)"></label>
+        <label class="fld">Nova senha<input id="aPw" type="password" required minlength="8" autocomplete="new-password"></label>
+        <label class="fld">Código de recuperação<input id="aCode" required placeholder="XXXX-XXXX-XXXX-XXXX-XXXX" autocomplete="off"></label>
+        ${E}<button class="btn acc" style="padding:12px">Trocar senha e entrar</button><button type="button" class="linkbtn" data-m="forgot">Reenviar código</button>`,
+      rec: `<h2>Destravar seus dados</h2><p class="hint">Sua senha mudou. Digite o <b>código de recuperação</b> que você guardou ao criar a conta.</p>
+        <label class="fld">Código de recuperação<input id="aCode" required placeholder="XXXX-XXXX-XXXX-XXXX-XXXX" autocomplete="off"></label>
+        <label class="fld">Sua senha<input id="aPw" type="password" required minlength="8" autocomplete="current-password"></label>
+        ${E}<button class="btn acc" style="padding:12px">Destravar</button>`,
+      in: `<h2>Entrar</h2>${cloud ? `${emailFld()}
+        <label class="fld">Senha<input id="aPw" type="password" required minlength="8" autocomplete="current-password"></label>
+        ${rememberFld}${E}<button class="btn acc" style="padding:12px">Entrar</button>
+        <button type="button" class="linkbtn" data-m="forgot" style="color:var(--muted)">Esqueci a senha</button>
+        <div style="display:flex;align-items:center;gap:10px;color:var(--muted);font-size:12px"><hr style="flex:1;border:0;border-top:1px solid var(--line)">ainda não tem conta?<hr style="flex:1;border:0;border-top:1px solid var(--line)"></div>
+        <button type="button" class="btn" data-m="req" style="padding:12px">Pedir acesso</button>
+        <button type="button" class="linkbtn" data-m="up" style="color:var(--muted);text-align:center">Já fui aprovado · criar minha senha</button>`
+        : `<p class="hint">O login online ainda não foi configurado neste endereço.</p>`}
+        <button type="button" class="btn" id="aDemo" style="padding:12px;background:transparent">Experimentar sem conta</button>
+        <p class="hint" style="font-size:12px">🔒 Seus dados são criptografados no seu aparelho antes de irem para a nuvem. Ninguém além de você consegue lê-los.</p>`,
+    };
+    $("#authForm").innerHTML = V[mode]; Controls.enhance($("#authForm"));
+    document.querySelectorAll("#authForm [data-m]").forEach(b => b.onclick = () => { email0 = $("#aEmail")?.value || email0; mode = b.dataset.m; msg = ""; draw(); });
     const demo = $("#aDemo"); if (demo) demo.onclick = () => { S = Store.startDemo() || demoState(); Store.save(S); enterApp(); if (!localStorage.getItem("cv.tour")) setTimeout(tour, 600); };
+    if (mode === "bio") $("#aBioGo").onclick = async () => {
+      const b = $("#aBioGo"), old = b.innerHTML; b.innerHTML = '<span class="spin"></span> Verificando…'; b.disabled = true;
+      try { S = (await Store.bioUnlock(email0)).state; enterApp(); }
+      catch (ex) { msg = /NotAllowed|denied/i.test(ex?.message || "") ? "Cancelado." : "Não foi possível desbloquear. Use sua senha."; draw(); }
+      finally { if (b.isConnected) { b.innerHTML = old; b.disabled = false; } }
+    };
+    const f = $("#authForm").querySelector("input:not([readonly])"); if (f && matchMedia("(pointer:fine)").matches) f.focus();
   };
   $("#authForm").onsubmit = async e => {
     e.preventDefault();
     const err = t => { $("#aErr").textContent = t; const f = $("#authForm"); f.classList.remove("shake"); f.offsetWidth; f.classList.add("shake"); };
-    const btn = $("#authForm").querySelector(".btn.acc"), old = btn.innerHTML; btn.innerHTML = '<span class="spin"></span> Aguarde…'; btn.disabled = true;
+    const btn = $("#authForm").querySelector(".btn.acc"); if (!btn) return;
+    const bad = [...$("#authForm").querySelectorAll("input[required]")].find(i => !i.checkValidity());
+    if (bad) { bad.focus(); return err(bad.type === "email" ? "Digite um e-mail válido." : bad.minLength > 0 && bad.value ? `Use pelo menos ${bad.minLength} caracteres.` : "Preencha este campo."); }
+    const old = btn.innerHTML; btn.innerHTML = '<span class="spin"></span> Aguarde…'; btn.disabled = true;
     try {
-      if (mode === "forgot") { await Store.resetPasswordEmail($("#aEmail").value); mode = "in"; msg = "Link enviado. Confira seu e-mail."; draw(); return; }
-      if (mode === "rec") { const r = await Store.recover($("#aCode").value, $("#aPw").value); S = r.state; enterApp(); toast("Acesso recuperado"); return; }
-      const email = $("#aEmail").value.trim(), pw = $("#aPw").value;
+      const email = ($("#aEmail")?.value || email0).trim().toLowerCase(), pw = $("#aPw")?.value;
+      if (email) email0 = email;
+      if ($("#aRemember")) Store.setRemember($("#aRemember").checked);
+      if (mode === "req") {
+        const r = await Store.messenger({ action: "request", email, name: $("#aName").value.trim(), note: $("#aNote").value.trim() });
+        if (r.status === "already") { mode = "up"; msg = "Seu e-mail já foi aprovado! Crie sua senha."; return draw(); }
+        if (r.status === "full") return err("Muitos pedidos na fila agora. Tente de novo em alguns dias.");
+        if (r.status === "invalid") return err("Digite um e-mail válido.");
+        if (r.status === "wait") return err("Pedido já enviado há pouco. Aguarde alguns minutos.");
+        if (r.status !== "created" && r.status !== "pending") throw new Error(r.message || "falha");
+        mode = "sent"; return draw();
+      }
+      if (mode === "forgot") { const r = await Store.messenger({ action: "forgot", email }); if (r.status === "wait") return err("Código enviado há pouco. Aguarde um minuto."); mode = "code"; msg = ""; draw(); return toast("Se existir conta com esse e-mail, o código chegou."); }
+      if (mode === "code") {
+        const r = await Store.finishReset(email, $("#aOtp").value.trim(), pw);
+        if (r.status !== "ok") return err({ wrong: "Código incorreto.", expired: "Código vencido. Peça outro.", locked: "Muitas tentativas. Peça um novo código.", weak: "Use pelo menos 8 caracteres." }[r.status] || "Não foi possível trocar a senha.");
+        const s = await Store.signIn(email, pw);
+        const st = s.needRecovery ? (await Store.recover($("#aCode").value, pw)).state : s.state;
+        S = st; enterApp(); return toast("Senha trocada");
+      }
+      if (mode === "rec") { const r = await Store.recover($("#aCode").value, pw); S = r.state; enterApp(); toast("Acesso recuperado"); return; }
       if (mode === "up") {
         if (pw !== $("#aPw2").value) return err("As senhas não são iguais.");
         const r = await Store.signUp(email, pw, baseState());
-        if (r.confirmEmail) { mode = "in"; msg = "Conta criada! Confirme pelo link que enviamos ao seu e-mail e depois entre."; draw(); return; }
-        S = r.state; showRecovery(r.recoveryCode);
-      } else {
-        const r = await Store.signIn(email, pw);
-        if (r.noVault) { const c = await Store.createVault(pw, baseState()); S = c.state; showRecovery(c.recoveryCode); return; }
-        if (r.needRecovery) { mode = "rec"; draw(); return; }
-        S = r.state; enterApp();
+        if (r.confirmEmail) { mode = "in"; msg = "Conta criada! Confirme pelo e-mail e depois entre."; return draw(); }
+        S = r.state; return showRecovery(r.recoveryCode);
       }
+      const r = await Store.signIn(email, pw);
+      if (r.noVault) { const c = await Store.createVault(pw, baseState()); S = c.state; return showRecovery(c.recoveryCode); }
+      if (r.needRecovery) { mode = "rec"; return draw(); }
+      S = r.state; enterApp();
     } catch (ex) {
       const m = ex?.message || "";
-      err(/Invalid login/i.test(m) ? "E-mail ou senha incorretos." : /Email not confirmed/i.test(m) ? "Confirme seu e-mail pelo link que enviamos." : /registered/i.test(m) ? "Esse e-mail já tem conta. Tente entrar." : /fetch|network/i.test(m) ? "Sem conexão. Verifique a internet." : /decrypt|operation/i.test(m) ? "Código de recuperação incorreto." : m || "Algo deu errado. Tente de novo.");
+      err(/NOT_APPROVED|Database error saving/i.test(m) ? "Esse e-mail ainda não foi aprovado. Use “Pedir acesso”." : /Invalid login/i.test(m) ? "E-mail ou senha incorretos." : /registered|already/i.test(m) ? "Esse e-mail já tem conta. Tente entrar." : /fetch|network|Failed/i.test(m) ? "Sem conexão. Verifique a internet." : /decrypt|operation/i.test(m) ? "Código de recuperação incorreto." : "Algo deu errado. Tente de novo.");
     } finally { if (btn.isConnected) { btn.innerHTML = old; btn.disabled = false; } }
   };
   draw();
@@ -655,9 +721,12 @@ function tour() {
 /* ---------- boot ---------- */
 (async () => {
   try {
+    const criar = new URLSearchParams(location.search).get("criar");
+    if (criar) { history.replaceState(null, "", location.pathname); return showAuth("", "up", criar); }
     const r = await Store.resume();
     if (r?.state) { S = r.state; enterApp(); return; }
-    showAuth(r?.needPassword ? "Digite sua senha para destravar seus dados." : "");
+    if (r?.needPassword && r.bioAvail) return showAuth("", "bio", r.email);
+    showAuth(r?.needPassword ? "Digite sua senha para destravar seus dados." : "", r?.needPassword ? "in" : undefined, r?.email);
   } catch (e) { showAuth("Não foi possível conectar. Verifique a internet."); }
   if ("serviceWorker" in navigator && location.protocol.startsWith("http")) navigator.serviceWorker.register("sw.js").catch(() => {});
 })();
