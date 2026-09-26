@@ -51,7 +51,7 @@ const pessoa = id => S.pessoas.find(p => p.id === id) || { n: "?", cor: "#8b93ab
 function monthItems(k) {
   const out = [];
   S.recorrentes.forEach(r => { if (diffM(r.inicio, k) >= 0 && (!r.fim || diffM(k, r.fim) >= 0)) out.push({ ...r, src: "rec", dia: r.dia || 1 }); });
-  S.parcelas.forEach(p => { const i = diffM(p.data.slice(0, 7), k); if (i >= 0 && i < p.n) out.push({ ...p, tipo: "saida", src: "parc", idx: i + 1, dia: +p.data.slice(8) }); });
+  S.parcelas.forEach(p => { const i = diffM(p.data.slice(0, 7), k); if (i >= 0 && i < p.n && (!p.fim || diffM(k, p.fim) <= 0)) out.push({ ...p, tipo: "saida", src: "parc", idx: i + 1, dia: +p.data.slice(8) }); });
   S.avulsos.forEach(a => { if (a.data.slice(0, 7) === k) out.push({ ...a, src: "avulso", dia: +a.data.slice(8) }); });
   return out.sort((a, b) => b.dia - a.dia);
 }
@@ -491,10 +491,14 @@ function editItem(src, id) {
   const fromHere = src === "rec" && diffM(it.inicio, cur) > 0;
   itemForm({ title: src === "rec" ? "Editar recorrente" : src === "parc" ? "Editar parcelamento" : "Editar lançamento", it: { ...it, tipo: it.tipo || "saida" }, rep: src === "rec" ? "mes" : src === "parc" ? "parc" : "uma", editing: true,
     extra: src === "rec" ? `<div class="note" style="margin:0"><div>Repete todo mês desde ${short(it.inicio)}${it.fim ? " até " + short(it.fim) : ""}.${fromHere ? `<label style="display:flex;gap:8px;margin-top:6px;font-weight:600"><input type="checkbox" id="fromHere" checked> Aplicar mudanças só a partir de ${short(cur)}</label>` : ""}
-      <div class="tools" style="margin-top:8px"><button type="button" class="btn sm" id="endHere">Parar de repetir a partir de ${short(fromHere ? cur : addM(cur, 1))}</button></div></div></div>` : "",
+      <div class="tools" style="margin-top:8px"><button type="button" class="btn sm" id="endHere">Parar de repetir a partir de ${short(fromHere ? cur : addM(cur, 1))}</button></div></div></div>` :
+      src === "parc" ? (() => { const i = diffM(it.data.slice(0, 7), cur) + 1, ativa = !it.fim || diffM(cur, it.fim) <= 0;
+        return `<div class="note" style="margin:0"><div>${it.n}× de ${brl(it.v)}, comprado em ${short(it.data.slice(0, 7))}${it.fim ? ` · quitado antecipadamente em ${short(it.fim)} (parcela ${i > it.n ? it.n : i}/${it.n})` : i >= 1 && i <= it.n ? ` · parcela ${i}/${it.n} atual` : ""}.
+        ${ativa && i <= it.n ? `<div class="tools" style="margin-top:8px"><button type="button" class="btn sm" id="quitarParc">Quitar antecipadamente (parou de pagar em ${short(cur)})</button></div>` : ""}</div></div>`; })() : "",
     bind: () => {
       $("#ldel").onclick = () => { const snap = snapshot(); S[list] = S[list].filter(x => x.id !== id); closeSheet(); commit("Excluído", restoreFrom(snap)); };
       if ($("#endHere")) $("#endHere").onclick = () => { const snap = snapshot(); it.fim = fromHere ? addM(cur, -1) : cur; closeSheet(); commit("Não repete mais depois de " + short(it.fim), restoreFrom(snap)); };
+      if ($("#quitarParc")) $("#quitarParc").onclick = () => { const snap = snapshot(); it.fim = cur; closeSheet(); commit("Quitado — some das faturas a partir de " + short(cur), restoreFrom(snap)); };
     },
     onSave: f => {
       const snap = snapshot(), upd = { d: f.d, v: f.v, cat: f.cat, conta: f.conta };
