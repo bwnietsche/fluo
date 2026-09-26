@@ -1,6 +1,5 @@
 /* Fluo — armazenamento
-   Modo nuvem: Supabase Auth + tabela vaults (1 linha por usuário, dados cifrados com AES-256-GCM no navegador).
-   Modo demo:  localStorage, sem conta.
+   Supabase Auth + tabela vaults (1 linha por usuário, dados cifrados com AES-256-GCM no navegador).
    Economia de requisições: 1 leitura ao entrar, escrita agrupada (debounce 2,5 s) + ao sair da tela. */
 (() => {
   const enc = new TextEncoder(), dec = new TextDecoder();
@@ -27,11 +26,58 @@
   const sb = cloudReady ? window.supabase.createClient(cfg.SUPABASE_URL, cfg.SUPABASE_ANON_KEY, { auth: { persistSession: true } }) : null;
 
   let mode = null, dataKey = null, version = 0, user = null, timer = null, pending = null, onStatus = () => {};
-  const LOCAL = "fluo.demo";
-  const KEYCACHE = "fluo.k"; // chave dos dados guardada só nesta sessão do navegador
+  const KEYCACHE = "fluo.k"; // chave dos dados: sessionStorage (só esta aba) ou localStorage ("lembrar" ligado)
+  const REMEMBER = "fluo.remember"; // "1" = manter a chave entre reaberturas do app, sem digitar senha de novo
+  const BIO_PREFIX = "fluo.bio."; // por e-mail: credencial WebAuthn + chave de dados embrulhada por ela
 
-  async function cacheKey() { try { sessionStorage.setItem(KEYCACHE, b64(await crypto.subtle.exportKey("raw", dataKey))); } catch (e) {} }
-  async function restoreKey() { try { const s = sessionStorage.getItem(KEYCACHE); if (s) dataKey = await crypto.subtle.importKey("raw", ub64(s), "AES-GCM", true, ["encrypt", "decrypt"]); } catch (e) {} return !!dataKey; }
+  const remembered = () => { try { return localStorage.getItem(REMEMBER) === "1"; } catch (e) { return false; } };
+  async function cacheKey() {
+    try {
+      const raw = b64(await crypto.subtle.exportKey("raw", dataKey));
+      (remembered() ? localStorage : sessionStorage).setItem(KEYCACHE, raw);
+      (remembered() ? sessionStorage : localStorage).removeItem(KEYCACHE); // não deixa cópia velha no outro lugar
+    } catch (e) {}
+  }
+  async function restoreKey() {
+    try { const s = localStorage.getItem(KEYCACHE) || sessionStorage.getItem(KEYCACHE); if (s) dataKey = await crypto.subtle.importKey("raw", ub64(s), "AES-GCM", true, ["encrypt", "decrypt"]); } catch (e) {}
+    return !!dataKey;
+  }
+
+  /* ---------- biometria (WebAuthn + extensão PRF): a impressão/rosto nunca sai do aparelho.
+     O navegador devolve um segredo estável ligado à credencial; usamos esse segredo para embrulhar
+     a MESMA chave de dados (AES-256) que a senha já protege — a biometria não troca a senha, é um atalho local. */
+  const canWebAuthn = () => !!(window.PublicKeyCredential && navigator.credentials);
+  async function bioSupported() { try { return canWebAuthn() && await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable(); } catch (e) { return false; } }
+  function bioRecord(email) { try { return JSON.parse(localStorage.getItem(BIO_PREFIX + email.toLowerCase()) || "null"); } catch (e) { return null; } }
+  const prfKey = async prfBytes => crypto.subtle.importKey("raw", await crypto.subtle.digest("SHA-256", prfBytes), "AES-GCM", false, ["encrypt", "decrypt"]);
+
+  async function bioEnroll(email) {
+    if (!dataKey) throw new Error("sem sessão ativa");
+    const salt = rnd(32);
+    const cred = await navigator.credentials.create({ publicKey: {
+      challenge: rnd(32), rp: { name: "Fluo" },
+      user: { id: enc.encode(email), name: email, displayName: email },
+      pubKeyCredParams: [{ alg: -7, type: "public-key" }, { alg: -257, type: "public-key" }],
+      authenticatorSelection: { authenticatorAttachment: "platform", userVerification: "required", residentKey: "preferred" },
+      extensions: { prf: { eval: { first: salt } } }, timeout: 60000,
+    } });
+    const prf = cred.getClientExtensionResults().prf?.results?.first;
+    if (!prf) throw new Error("PRF_UNSUPPORTED"); // navegador aceitou a credencial mas não sabe derivar segredo (raro, mas existe)
+    const wrapped = await seal(await prfKey(prf), await crypto.subtle.exportKey("raw", dataKey));
+    localStorage.setItem(BIO_PREFIX + email.toLowerCase(), JSON.stringify({ credId: b64(new Uint8Array(cred.rawId)), salt: b64(salt), wrapped }));
+  }
+  async function bioUnlock(email) {
+    const rec = bioRecord(email); if (!rec) throw new Error("NO_BIO");
+    const salt = ub64(rec.salt);
+    const assertion = await navigator.credentials.get({ publicKey: {
+      challenge: rnd(32), allowCredentials: [{ id: ub64(rec.credId), type: "public-key", transports: ["internal"] }],
+      userVerification: "required", extensions: { prf: { eval: { first: salt } } }, timeout: 60000,
+    } });
+    const prf = assertion.getClientExtensionResults().prf?.results?.first;
+    if (!prf) throw new Error("PRF_UNSUPPORTED");
+    const raw = await open(await prfKey(prf), rec.wrapped);
+    dataKey = await crypto.subtle.importKey("raw", raw, "AES-GCM", true, ["encrypt", "decrypt"]);
+  }
 
   async function pull() {
     const { data, error } = await sb.from("vaults").select("*").eq("user_id", user.id).maybeSingle();
@@ -45,20 +91,16 @@
     get user() { return user; },
     onStatus(fn) { onStatus = fn; },
 
-    startDemo() {
-      mode = "demo"; user = { email: "modo demonstração" };
-      try { localStorage.setItem("fluo.mode", "demo"); return JSON.parse(localStorage.getItem(LOCAL)); } catch (e) { return null; }
-    },
-
     /* sessão já aberta (ex.: recarregou a página) */
     async resume() {
-      let demo = false; try { demo = localStorage.getItem("fluo.mode") === "demo"; } catch (e) {}
-      if (demo) { const st = this.startDemo(); if (st) return { state: st }; }
       if (!sb) return null;
       const { data } = await sb.auth.getSession();
       if (!data.session) return null;
       user = data.session.user;
-      if (!(await restoreKey())) return { needPassword: true, email: user.email };
+      if (!(await restoreKey())) {
+        const bioAvail = !!bioRecord(user.email) && await bioSupported();
+        return { needPassword: true, email: user.email, bioAvail };
+      }
       const row = await pull(); if (!row) return { needPassword: true, email: user.email };
       mode = "cloud"; version = row.version;
       return { state: JSON.parse(dec.decode(await open(dataKey, row.data))) };
@@ -110,10 +152,38 @@
       return { state: JSON.parse(dec.decode(await open(dataKey, row.data))) };
     },
 
-    async resetPasswordEmail(email) {
-      const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: location.origin + location.pathname });
-      if (error) throw error;
+    /* mensageiro = Google Apps Script do admin (pedidos de conta e código de senha, enviados pelo Gmail dele) */
+    async messenger(payload) {
+      if (!cfg.MESSENGER_URL) throw new Error("mensageiro não configurado");
+      const r = await fetch(cfg.MESSENGER_URL, { method: "POST", body: JSON.stringify(payload) }); // text/plain: sem preflight CORS
+      return r.json();
     },
+    async finishReset(email, code, newPassword) {
+      const { data, error } = await sb.rpc("finish_reset", { p_email: email, p_code: code, p_new_password: newPassword });
+      if (error) throw error;
+      return data;
+    },
+
+    /* lembrar senha: mantém a chave de dados no aparelho entre reaberturas (sem digitar senha de novo) */
+    get remembered() { return remembered(); },
+    setRemember(on) {
+      try {
+        if (on) { localStorage.setItem(REMEMBER, "1"); if (dataKey) cacheKey(); }
+        else { localStorage.removeItem(REMEMBER); localStorage.removeItem(KEYCACHE); if (dataKey) cacheKey(); }
+      } catch (e) {}
+    },
+    /* biometria (Face ID / digital): some se o navegador/aparelho não suportar */
+    bioSupported,
+    bioEnabled(email) { return !!bioRecord(email); },
+    async bioEnroll(email) { await bioEnroll(email); },
+    async bioUnlock(email) {
+      await bioUnlock(email);
+      const { data } = await sb.auth.getSession(); user = data.session.user;
+      const row = await pull(); if (!row) throw new Error("sem cofre");
+      mode = "cloud"; version = row.version;
+      return { state: JSON.parse(dec.decode(await open(dataKey, row.data))) };
+    },
+    bioForget(email) { try { localStorage.removeItem(BIO_PREFIX + email.toLowerCase()); } catch (e) {} },
 
     async changePassword(newPassword) {
       const { error } = await sb.auth.updateUser({ password: newPassword });
@@ -124,7 +194,6 @@
 
     /* agenda gravação (agrupa várias mudanças numa requisição só) */
     save(state) {
-      if (mode === "demo") { try { localStorage.setItem(LOCAL, JSON.stringify(state)); } catch (e) {} return; }
       if (mode !== "cloud") return;
       pending = state; onStatus("busy");
       clearTimeout(timer); timer = setTimeout(() => this.flush(), 2500);
@@ -146,14 +215,15 @@
 
     async signOut() {
       await this.flush();
-      try { sessionStorage.removeItem(KEYCACHE); localStorage.removeItem("fluo.mode"); } catch (e) {}
+      try { sessionStorage.removeItem(KEYCACHE); localStorage.removeItem(KEYCACHE); } catch (e) {}
       if (sb && mode === "cloud") await sb.auth.signOut();
       mode = null; dataKey = null; user = null;
     },
     async deleteAccount() {
-      if (mode === "demo") { try { localStorage.removeItem(LOCAL); } catch (e) {} return; }
+      const email = user?.email;
       await sb.from("vaults").delete().eq("user_id", user.id);
       await this.signOut();
+      if (email) this.bioForget(email);
     },
   };
 

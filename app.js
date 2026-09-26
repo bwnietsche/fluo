@@ -42,49 +42,6 @@ function baseState() {
     pessoas: [], recorrentes: [], parcelas: [], avulsos: [], dividas: [], pagos: {}, metas: [],
   };
 }
-function demoState() {
-  const s = baseState();
-  const Y = NOW, P = addM(NOW, -1), d = (k, n) => k + "-" + String(n).padStart(2, "0");
-  s.cats.push({ id: "pet", n: "Pet", e: "🐶", cor: "#2e2a26", tipo: "saida" });
-  s.cats.find(c => c.id === "alimentacao").lim = 350;
-  s.cats.find(c => c.id === "lazer").lim = 150;
-  s.contas.push(
-    { id: "rico", n: "Rico", cor: "#1d4fa8", tipo: "credito", venc: 10, limite: 3000 },
-    { id: "c6", n: "C6", cor: "#2e2a26", tipo: "credito", venc: 15, limite: 2500 },
-    { id: "mp", n: "Mercado Pago", cor: "#1b9ad1", tipo: "credito", venc: 5, limite: 1500 },
-    { id: "nu", n: "Nubank", cor: "#7a2fb0", tipo: "credito", venc: 12, limite: 4000 });
-  const start = addM(NOW, -8);
-  s.recorrentes = [
-    { id: uid(), tipo: "entrada", d: "Salário", v: 1000, cat: "salario", conta: "debito", dia: 5, inicio: start },
-    { id: uid(), tipo: "invest", d: "Renda variável", v: 150, cat: "invest", conta: "debito", dia: 6, inicio: start },
-    { id: uid(), tipo: "saida", d: "Claro", v: 29.99, cat: "contas", conta: "boleto", dia: 10, inicio: start },
-    { id: uid(), tipo: "saida", d: "Estacionamento", v: 88, cat: "transporte", conta: "boleto", dia: 10, inicio: start },
-    { id: uid(), tipo: "saida", d: "Gasolina", v: 400, cat: "transporte", conta: "debito", dia: 1, inicio: start },
-    { id: uid(), tipo: "saida", d: "Ferino", v: 60, cat: "outros", conta: "debito", dia: 8, inicio: start },
-    { id: uid(), tipo: "saida", d: "Netflix", v: 50, cat: "assinaturas", conta: "nu", dia: 12, inicio: start }];
-  s.parcelas = [
-    { id: uid(), d: "Barbeador", v: 17.99, n: 6, cat: "compras", conta: "rico", data: d(addM(NOW, -4), 8) },
-    { id: uid(), d: "Tênis", v: 62.5, n: 4, cat: "compras", conta: "nu", data: d(P, 14) },
-    { id: uid(), d: "Fone bluetooth", v: 39.9, n: 3, cat: "compras", conta: "mp", data: d(Y, 2) }];
-  s.avulsos = [
-    { id: uid(), tipo: "saida", d: "Mercado", v: 132.4, cat: "alimentacao", conta: "debito", data: d(Y, 6) },
-    { id: uid(), tipo: "saida", d: "Ração", v: 95, cat: "pet", conta: "c6", data: d(Y, 11) },
-    { id: uid(), tipo: "saida", d: "Cinema", v: 48, cat: "lazer", conta: "nu", data: d(Y, 19) },
-    { id: uid(), tipo: "saida", d: "Pizza", v: 96, cat: "alimentacao", conta: "nu", data: d(Y, 21) },
-    { id: uid(), tipo: "entrada", d: "Freela", v: 350, cat: "extra", conta: "debito", data: d(Y, 22) },
-    { id: uid(), tipo: "saida", d: "Mercado", v: 118, cat: "alimentacao", conta: "debito", data: d(P, 9) },
-    { id: uid(), tipo: "saida", d: "Farmácia", v: 64, cat: "saude", conta: "c6", data: d(P, 21) },
-    { id: uid(), tipo: "saida", d: "Cachorro", v: 140, cat: "pet", conta: "debito", data: d(addM(NOW, -2), 15) }];
-  s.pessoas = [{ id: "p1", n: "Lucas", cor: "#1b9ad1" }, { id: "p2", n: "Ana", cor: "#b04fa6" }];
-  s.dividas = [
-    { id: uid(), pessoa: "p1", dir: "me_deve", d: "Metade da pizza", v: 48, data: d(Y, 21), pagtos: [] },
-    { id: uid(), pessoa: "p1", dir: "me_deve", d: "Ingresso do show", v: 180, data: d(P, 3), pagtos: [{ v: 80, data: d(P, 20) }] },
-    { id: uid(), pessoa: "p2", dir: "devo", d: "Uber da volta", v: 32, data: d(Y, 18), pagtos: [] }];
-  s.metas = [{ id: uid(), d: "Reserva de emergência", alvo: 6000, atual: 1350 }, { id: uid(), d: "Viagem de fim de ano", alvo: 2500, atual: 800 }];
-  s.pagos[NOW] = {};
-  return s;
-}
-
 let S = null, cur = NOW, page = "mes", sub = "mes", filtro = "tudo", busca = "", animate = true, charts = [];
 const cat = id => S.cats.find(c => c.id === id) || { n: "Sem categoria", e: "•", cor: "#8b93ab" };
 const conta = id => S.contas.find(c => c.id === id) || { n: "Sem conta", cor: "#8b93ab", tipo: "debito" };
@@ -433,11 +390,11 @@ function pgAjustes() {
    <div class="box c6"><h2>Aparência e privacidade</h2>
     <div class="fld" style="margin-top:10px">Tema<div class="seg" id="themeSeg">${[["auto", "Automático"], ["light", "Claro"], ["dark", "Escuro"]].map(([k, t]) => `<button data-t="${k}" aria-pressed="${S.prefs.theme === k}">${t}</button>`).join("")}</div></div>
     <label class="pref"><input type="checkbox" id="privDef" ${S.prefs.priv ? "checked" : ""}> Esconder valores (o mesmo que o botão do olho 👁 no topo)</label></div>
-   <div class="box c6"><h2>Conta</h2><p class="hint">${Store.mode === "demo" ? "Você está no modo demonstração: os dados ficam só neste aparelho. Manter sessão e biometria só existem com uma conta online (criptografada)." : "Conectado como <b>" + esc(Store.user?.email) + "</b>. Seus dados são criptografados antes de sair do aparelho: nem o administrador consegue ler."}</p>
-    ${Store.mode === "cloud" ? `<label class="pref"><input type="checkbox" id="rememberChk" ${Store.remembered ? "checked" : ""}> Manter minha sessão neste aparelho (não pedir senha ao reabrir)</label>
-    <label class="pref" id="bioRow" style="display:none"><input type="checkbox" id="bioChk"> Entrar com biometria (Face ID / digital) neste aparelho</label>` : ""}
-    <div class="tools" style="margin-top:10px">${Store.mode === "cloud" ? '<button class="btn" id="chPw">Trocar senha</button>' : ""}<button class="btn" id="expBtn">Baixar backup</button><label class="btn" style="cursor:pointer">Restaurar backup<input type="file" id="impFile" accept="application/json" hidden></label><button class="btn" id="outBtn">${Store.mode === "demo" ? "Sair do demo" : "Sair"}</button></div>
-    <div class="tools" style="margin-top:10px">${Store.mode === "demo" ? '<button class="btn" id="resetDemo">Recomeçar com dados de exemplo</button>' : ""}<button class="btn danger" id="wipe">Apagar todos os dados</button></div></div>
+   <div class="box c6"><h2>Conta</h2><p class="hint">Conectado como <b>${esc(Store.user?.email)}</b>. Seus dados são criptografados antes de sair do aparelho: nem o administrador consegue ler.</p>
+    <label class="pref"><input type="checkbox" id="rememberChk" ${Store.remembered ? "checked" : ""}> Manter minha sessão neste aparelho (não pedir senha ao reabrir)</label>
+    <label class="pref" id="bioRow" style="display:none"><input type="checkbox" id="bioChk"> Entrar com biometria (Face ID / digital) neste aparelho</label>
+    <div class="tools" style="margin-top:10px"><button class="btn" id="chPw">Trocar senha</button><button class="btn" id="expBtn">Baixar backup</button><label class="btn" style="cursor:pointer">Restaurar backup<input type="file" id="impFile" accept="application/json" hidden></label><button class="btn" id="outBtn">Sair</button></div>
+    <div class="tools" style="margin-top:10px"><button class="btn danger" id="wipe">Apagar todos os dados</button></div></div>
    <div class="box c12"><h2>Instalar no celular ou PC</h2><p class="hint" style="margin-bottom:0"><b>iPhone:</b> abra no Safari → botão Compartilhar → “Adicionar à Tela de Início”. <b>Android:</b> Chrome → menu ⋮ → “Instalar app”. <b>PC:</b> Chrome/Edge → ícone de instalar na barra de endereço.</p></div></section>`;
   const v = $("#view");
   v.querySelectorAll("[data-cat]").forEach(i => i.onchange = () => { const c = S.cats.find(x => x.id === i.dataset.cat); const k = i.dataset.k; c[k] = k === "lim" ? (+i.value || undefined) : i.value; if (k === "n" && !c.n.trim()) c.n = "Sem nome"; commit(k === "tipo" ? "" : "Salvo"); });
@@ -464,7 +421,6 @@ function pgAjustes() {
   $("#impFile").onchange = async e => { try { const d = JSON.parse(await e.target.files[0].text()); if (!d.cats || !d.contas) throw 0; const snap = snapshot(); S = d; commit("Backup restaurado", restoreFrom(snap)); } catch (err) { toast("Arquivo inválido: escolha um backup do Fluo (.json)"); } };
   $("#outBtn").onclick = async () => { await Store.signOut(); S = null; showAuth(); };
   $("#wipe").onclick = () => confirmBox("Apagar tudo?", "Todos os lançamentos, cartões, pessoas e metas serão apagados. Baixe um backup antes se quiser guardar.", "Apagar tudo", () => { S = baseState(); commit("Dados apagados"); });
-  if ($("#resetDemo")) $("#resetDemo").onclick = () => { S = demoState(); animate = true; commit("Exemplo recarregado"); };
   if ($("#chPw")) $("#chPw").onclick = () => openSheet(`<form id="cpf"><h2>Trocar senha</h2><label class="fld">Nova senha<input id="np1" type="password" minlength="8" required autocomplete="new-password" autofocus></label><label class="fld">Repita<input id="np2" type="password" minlength="8" required autocomplete="new-password"></label><div class="err" id="cpe"></div><div class="tools" style="justify-content:flex-end"><button type="button" class="btn" id="cpx">Cancelar</button><button class="btn acc">Trocar</button></div></form>`, () => {
     $("#cpx").onclick = closeSheet; $("#cpf").onsubmit = async e => { e.preventDefault(); if ($("#np1").value !== $("#np2").value) { $("#cpe").textContent = "As senhas não são iguais."; return; } try { await Store.changePassword($("#np1").value); closeSheet(); toast("Senha trocada"); } catch (err) { $("#cpe").textContent = err.message; } }; });
 }
@@ -623,12 +579,10 @@ function showAuth(msg, startMode, preEmail) {
         <button type="button" class="btn" data-m="req" style="padding:12px">Pedir acesso</button>
         <button type="button" class="linkbtn" data-m="up" style="color:var(--muted);text-align:center">Já fui aprovado · criar minha senha</button>`
         : `<p class="hint">O login online ainda não foi configurado neste endereço.</p>`}
-        <button type="button" class="btn" id="aDemo" style="padding:12px;background:transparent">Experimentar sem conta</button>
         <p class="hint" style="font-size:12px">🔒 Seus dados são criptografados no seu aparelho antes de irem para a nuvem. Ninguém além de você consegue lê-los.</p>`,
     };
     $("#authForm").innerHTML = V[mode]; Controls.enhance($("#authForm"));
     document.querySelectorAll("#authForm [data-m]").forEach(b => b.onclick = () => { email0 = $("#aEmail")?.value || email0; mode = b.dataset.m; msg = ""; draw(); });
-    const demo = $("#aDemo"); if (demo) demo.onclick = () => { S = Store.startDemo() || demoState(); Store.save(S); enterApp(); if (!localStorage.getItem("cv.tour")) setTimeout(tour, 600); };
     if (mode === "bio") $("#aBioGo").onclick = async () => {
       const b = $("#aBioGo"), old = b.innerHTML; b.innerHTML = '<span class="spin"></span> Verificando…'; b.disabled = true;
       try { S = (await Store.bioUnlock(email0)).state; enterApp(); }
