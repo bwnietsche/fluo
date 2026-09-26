@@ -47,11 +47,13 @@
 
     startDemo() {
       mode = "demo"; user = { email: "modo demonstração" };
-      try { return JSON.parse(localStorage.getItem(LOCAL)); } catch (e) { return null; }
+      try { localStorage.setItem("caixaverde.mode", "demo"); return JSON.parse(localStorage.getItem(LOCAL)); } catch (e) { return null; }
     },
 
     /* sessão já aberta (ex.: recarregou a página) */
     async resume() {
+      let demo = false; try { demo = localStorage.getItem("caixaverde.mode") === "demo"; } catch (e) {}
+      if (demo) { const st = this.startDemo(); if (st) return { state: st }; }
       if (!sb) return null;
       const { data } = await sb.auth.getSession();
       if (!data.session) return null;
@@ -144,7 +146,7 @@
 
     async signOut() {
       await this.flush();
-      try { sessionStorage.removeItem(KEYCACHE); } catch (e) {}
+      try { sessionStorage.removeItem(KEYCACHE); localStorage.removeItem("caixaverde.mode"); } catch (e) {}
       if (sb && mode === "cloud") await sb.auth.signOut();
       mode = null; dataKey = null; user = null;
     },

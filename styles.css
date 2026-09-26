@@ -31,7 +31,7 @@ h1,h2,h3{margin:0;text-wrap:balance}
 @keyframes grow{from{transform:scaleX(0)}to{transform:scaleX(1)}}
 @keyframes shimmer{from{background-position:-200% 0}to{background-position:200% 0}}
 @keyframes float{0%,100%{transform:translateY(0) rotate(0)}50%{transform:translateY(-14px) rotate(6deg)}}
-@keyframes toastIn{from{transform:translate(-50%,-20px);opacity:0}to{transform:translate(-50%,0);opacity:1}}
+@keyframes toastIn{from{transform:translate(-50%,20px);opacity:0}to{transform:translate(-50%,0);opacity:1}}
 @keyframes shake{20%,60%{transform:translateX(-6px)}40%,80%{transform:translateX(6px)}}
 .anim>*{animation:rise .5s var(--ease) both;animation-delay:calc(var(--i,0) * 55ms)}
 .view-enter{animation:fade .25s ease both}
@@ -59,7 +59,7 @@ aside nav{display:grid;gap:2px}
 .sync.err i{background:var(--out)}
 
 main{padding-inline:28px;padding-block:22px 110px;min-width:0;max-width:1260px;width:100%}
-.top{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;margin-bottom:20px}
+.top{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;margin-bottom:20px;position:sticky;top:0;z-index:15;background:var(--bg);padding-block:10px;margin-top:-10px}
 .top h1{font:700 22px var(--display)}
 .top .sub{color:var(--muted);font-size:13px;min-height:20px}
 .tools{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
@@ -177,7 +177,8 @@ main{padding-inline:28px;padding-block:22px 110px;min-width:0;max-width:1260px;w
 .person:hover{transform:translateY(-3px);border-color:var(--ink)}
 .avatar{width:42px;height:42px;border-radius:14px;display:grid;place-items:center;font:700 16px var(--display);color:#fff;flex:none}
 .person .head{display:flex;gap:10px;align-items:center}
-.person .bal{font:700 20px var(--display);letter-spacing:-.02em}
+.person .bal{font:700 20px var(--display);letter-spacing:-.02em;white-space:nowrap}
+.card{cursor:pointer}
 .bal.pos{color:var(--in)}.bal.neg{color:var(--out)}
 
 /* ---------- ajustes ---------- */
@@ -191,11 +192,20 @@ main{padding-inline:28px;padding-block:22px 110px;min-width:0;max-width:1260px;w
 .seg-row{display:flex;gap:6px;flex-wrap:wrap}
 
 /* ---------- sheet / modal ---------- */
-.sheet{position:fixed;inset:0;background:rgba(8,11,20,.55);display:grid;place-items:center;z-index:30;padding:16px;animation:fade .2s both;backdrop-filter:blur(3px)}
-.sheet>form,.sheet>.panel{background:var(--panel);border-radius:24px;padding:22px;width:100%;max-width:470px;display:grid;gap:12px;max-height:calc(100% - 20px);overflow:auto;animation:sheetUp .35s var(--spring) both}
+.sheet{position:fixed;inset:0;background:rgba(8,11,20,.6);display:grid;place-items:center;z-index:30;padding:16px;animation:fade .15s both}
+.sheet>form,.sheet>.panel{background:var(--panel);border-radius:24px;padding:22px;width:100%;max-width:470px;display:grid;gap:12px;max-height:calc(100% - 20px);overflow-y:auto;overflow-x:hidden;animation:sheetUp .25s var(--ease) both;min-width:0}
+.sheet *{min-width:0}
+.fld input,.fld select{width:100%}
+input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
+input[type=number]{-moz-appearance:textfield}
+.preview{font-size:13px;color:var(--accent);font-weight:700;min-height:18px}
+.mini{font-size:11px;font-weight:700;color:var(--muted);letter-spacing:.02em}
+.set-fields{display:flex;gap:10px;flex-wrap:wrap;align-items:end}
+.set-fields label{display:grid;gap:1px}
+.pref{display:flex;gap:10px;align-items:center;padding:10px 12px;border-radius:12px;background:var(--soft);margin-top:10px;cursor:pointer;font-size:14px}
 .sheet h2{font:700 17px var(--display)}
 .seg{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;background:var(--soft);padding:4px;border-radius:12px;position:relative}
-.seg button{border:0;background:none;border-radius:9px;padding:8px;font-weight:700;font-size:13px;transition:background .25s,box-shadow .25s,color .25s}
+.seg button{border:0;background:none;border-radius:9px;padding:8px;font-weight:700;font-size:13px}
 .seg button[aria-pressed="true"]{background:var(--panel);box-shadow:0 1px 4px rgba(0,0,0,.14)}
 .amount{font:700 34px var(--display);border:0;background:none;width:100%;letter-spacing:-.03em;padding:0}
 .fld{display:grid;gap:4px;font-size:12px;font-weight:700;color:var(--muted)}
@@ -203,14 +213,14 @@ main{padding-inline:28px;padding-block:22px 110px;min-width:0;max-width:1260px;w
 .fld input:focus,.fld select:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-2);outline:0}
 .two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .repeat{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
-.repeat button{border:1px solid var(--line);background:var(--soft);border-radius:10px;padding:8px 4px;font-size:13px;font-weight:700;transition:all .2s var(--ease)}
+.repeat button{border:1px solid var(--line);background:var(--soft);border-radius:10px;padding:8px 4px;font-size:13px;font-weight:700}
 .repeat button[aria-pressed="true"]{border-color:var(--ink);background:var(--ink);color:var(--bg)}
 .fab{position:fixed;right:22px;bottom:calc(22px + env(safe-area-inset-bottom,0px));height:56px;padding:0 22px;border:0;border-radius:18px;background:var(--accent);color:#fff;font-weight:700;font-size:15px;box-shadow:0 10px 26px color-mix(in srgb,var(--accent) 45%,transparent);z-index:20;display:flex;gap:8px;align-items:center;transition:transform .3s var(--spring),box-shadow .3s;animation:pop .5s var(--spring) both .3s}
 .fab:hover{transform:translateY(-3px) scale(1.03)}
 .fab:active{transform:scale(.93)}
 .fab b{font-size:26px;line-height:1;transition:transform .35s var(--spring)}
 .fab:hover b{transform:rotate(90deg)}
-.toast{position:fixed;left:50%;top:calc(18px + env(safe-area-inset-top,0px));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:12px;font-weight:700;z-index:40;animation:toastIn .35s var(--spring) both;display:flex;gap:10px;align-items:center}
+.toast{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);max-width:calc(100% - 32px);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:12px;font-weight:700;z-index:40;animation:toastIn .35s var(--spring) both;display:flex;gap:10px;align-items:center}
 .toast button{border:0;background:none;color:var(--accent);font-weight:700;padding:0}
 .bottomnav{display:none}
 
@@ -241,7 +251,12 @@ main{padding-inline:28px;padding-block:22px 110px;min-width:0;max-width:1260px;w
   .big .v{font-size:34px}
   .kpis{gap:8px}.kpi .v{font-size:14px}
   .top h1{font-size:18px}
-  .mnav span{min-width:112px;font-size:14px}
+  .top{flex-wrap:nowrap;margin-bottom:12px}
+  .top>div:first-child{display:none}
+  .top>.tools{width:100%;justify-content:space-between;flex-wrap:nowrap}
+  .mnav span{min-width:96px;font-size:13px}
+  .eye{width:44px;height:44px;margin-left:auto}
+  .toast{bottom:calc(150px + env(safe-area-inset-bottom,0px))}
   .bottomnav{display:grid;grid-template-columns:repeat(6,1fr);position:fixed;left:0;right:0;bottom:0;background:var(--panel);border-top:1px solid var(--line);padding:6px 4px calc(6px + env(safe-area-inset-bottom,0px));z-index:19}
   .bottomnav .navbtn{display:grid;justify-items:center;gap:2px;font-size:10.5px;font-weight:700;color:var(--muted);padding:5px 2px;text-align:center}
   .bottomnav .navbtn:hover{transform:none;background:none}

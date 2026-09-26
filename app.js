@@ -138,7 +138,7 @@ function toast(t, undo) {
   el.innerHTML = esc(t) + (undo ? ' <button id="undoBtn">Desfazer</button>' : "");
   el.hidden = false; el.style.animation = "none"; el.offsetHeight; el.style.animation = "";
   if (undo) $("#undoBtn").onclick = () => { undo(); el.hidden = true; Store.save(S); render(); };
-  clearTimeout(toastT); toastT = setTimeout(() => el.hidden = true, undo ? 5000 : 2200);
+  clearTimeout(toastT); toastT = setTimeout(() => el.hidden = true, undo ? 10000 : 2200);
 }
 const snapshot = () => JSON.parse(JSON.stringify(S));
 const restoreFrom = snap => () => { S = snap; };
@@ -186,6 +186,7 @@ document.addEventListener("click", e => {
 
 function render() {
   if (!S) return;
+  const keepY = window.scrollY;
   charts.forEach(c => c.destroy()); charts = [];
   applyTheme(); navs();
   const d = diffM(NOW, cur), monthly = ["mes", "lanc", "cartoes"].includes(page);
@@ -196,7 +197,7 @@ function render() {
   const v = $("#view"); v.className = animate ? "view-enter" : "";
   ({ mes: pgMes, lanc: pgLanc, cartoes: pgCartoes, pessoas: pgPessoas, futuro: pgFuturo, ajustes: pgAjustes })[page]();
   if (animate) { v.querySelectorAll(".anim").forEach(g => [...g.children].forEach((c, i) => c.style.setProperty("--i", i))); countUp(); }
-  else v.querySelectorAll(".anim").forEach(g => g.classList.remove("anim"));
+  else { v.querySelectorAll(".anim").forEach(g => g.classList.remove("anim")); window.scrollTo(0, keepY); }
   animate = false;
 }
 $("#prev").onclick = () => { cur = addM(cur, -1); animate = true; render(); };
@@ -277,9 +278,9 @@ function pgLanc() {
     const grp = [["entrada", "Entradas fixas"], ["saida", "Contas e assinaturas"], ["invest", "Aportes"]];
     body = `<section class="grid anim" style="margin-top:0">${grp.map(([t, h]) => { const l = S.recorrentes.filter(r => r.tipo === t); const ativos = l.filter(r => !r.fim || diffM(NOW, r.fim) >= 0);
       return `<div class="box c4"><h2>${h}<small class="money">${brl(ativos.reduce((s, r) => s + r.v, 0))}/mês</small></h2><div class="list">${l.map(r => `<div class="row" data-edit="rec:${r.id}" role="button" tabindex="0"><div class="ic" style="background:color-mix(in srgb,${cat(r.cat).cor} 16%,transparent)">${cat(r.cat).e}</div><div><div class="t">${esc(r.d)}</div><div class="m"><span class="dot" style="background:${conta(r.conta).cor}"></span>${esc(conta(r.conta).n)} · dia ${r.dia} · ${r.fim ? "até " + short(r.fim) : "desde " + short(r.inicio)}</div></div><div class="val"><span class="money">${brl(r.v)}</span></div><span></span></div>`).join("") || empty("🔁", "Nada aqui ainda.")}</div></div>`; }).join("")}</section>
-      <p class="hint" style="margin-top:12px">Para criar, use <b>Lançar</b> e escolha “Todo mês”.</p>`;
+      <p class="hint" style="margin-top:12px">Para criar, toque no botão <b>+</b> e escolha “Todo mês”. Toque num item para editar ou parar de repetir.</p>`;
   } else {
-    body = `<section class="box"><h2>Compras parceladas</h2><p class="hint">Cada compra aparece sozinha nos meses certos. Para criar, use Lançar → “Parcelado”.</p><div class="list">${S.parcelas.map(p => { const i = diffM(p.data.slice(0, 7), NOW) + 1, st = i < 1 ? "começa " + short(p.data.slice(0, 7)) : i > p.n ? "quitada" : `${i}/${p.n} agora`;
+    body = `<section class="box"><h2>Compras parceladas</h2><p class="hint">Cada compra aparece sozinha nos meses certos. Para criar, toque no botão <b>+</b> e escolha “Parcelado”.</p><div class="list">${S.parcelas.map(p => { const i = diffM(p.data.slice(0, 7), NOW) + 1, fim = short(addM(p.data.slice(0, 7), p.n - 1)), st = i < 1 ? "começa " + short(p.data.slice(0, 7)) : i > p.n ? "quitada" : `${i}/${p.n} agora · última em ${fim}`;
       return `<div class="row" data-edit="parc:${p.id}" role="button" tabindex="0"><div class="ic" style="background:color-mix(in srgb,${cat(p.cat).cor} 16%,transparent)">${cat(p.cat).e}</div><div><div class="t">${esc(p.d)}</div><div class="m"><span class="dot" style="background:${conta(p.conta).cor}"></span>${esc(conta(p.conta).n)} · ${p.n}× de <span class="money">${brl(p.v)}</span> · <span class="tag ${i > p.n ? "" : "parc"}">${st}</span></div></div><div class="val"><span class="money">${brl(p.v * p.n)}</span></div><span></span></div>`; }).join("") || empty("💳", "Nenhuma compra parcelada.")}</div></section>`;
   }
   $("#view").innerHTML = `<div class="anim">${sub === "mes" ? flow(calc(cur)) : ""}</div>` + tabs + body;
@@ -293,14 +294,15 @@ function pgCartoes() {
   const c = calc(cur), cr = S.contas.filter(a => a.tipo === "credito");
   const fut = []; for (let i = 0; i < 6; i++) { const k = addM(cur, i), x = calc(k); fut.push([k, cr.map(a => x.porConta[a.id] || 0)]); }
   $("#view").innerHTML = `<section class="cards anim">${S.contas.map(a => { const v = c.porConta[a.id] || 0, paid = a.tipo === "credito" && S.pagos[cur]?.["card:" + a.id];
-    return `<div class="card ${paid ? "paid" : ""}" style="background:${a.cor}">
+    return `<div class="card ${paid ? "paid" : ""}" style="background:${a.cor}" data-open-card="${a.id}" role="button" tabindex="0" title="Ver lançamentos deste cartão">
      ${a.tipo === "credito" && v ? `<button class="pay" data-card="${a.id}">${paid ? "✓ fatura paga" : "marcar fatura paga"}</button>` : ""}
-     <span class="n">${esc(a.n)}</span><span class="d">${a.tipo === "credito" ? "fatura · vence dia " + (a.venc || "?") : a.tipo === "boleto" ? "boletos do mês" : "saídas na conta"}</span>
+     <span class="n">${esc(a.n)}</span><span class="d">${a.tipo === "credito" ? "fatura" + (a.venc ? " · vence dia " + a.venc : "") : a.tipo === "boleto" ? "boletos do mês" : "saídas na conta"}</span>
      <span class="v money num" data-count="${v}">${brl(v)}</span>
      ${a.limite ? `<div class="lim"><i style="width:${Math.min(100, v / a.limite * 100)}%"></i></div><span class="d">${Math.round(v / a.limite * 100)}% do limite de <span class="money">${brl0(a.limite)}</span></span>` : ""}</div>`; }).join("")}
     <button class="card" data-p="ajustes" style="background:var(--soft);color:var(--muted);border:2px dashed var(--line);box-shadow:none;align-items:center;justify-content:center;font-weight:700">+ Adicionar cartão</button></section>
    <section class="grid anim"><div class="box c12"><h2>Faturas dos próximos meses</h2><p class="hint">Só o que já está comprometido: parcelas e assinaturas no crédito</p>${cr.length ? '<div class="chart"><canvas id="chFat"></canvas></div>' : empty("💳", "Cadastre um cartão de crédito em Ajustes.")}</div></section>`;
-  document.querySelectorAll("[data-card]").forEach(b => b.onclick = () => { (S.pagos[cur] ??= {}); const k = "card:" + b.dataset.card; S.pagos[cur][k] = !S.pagos[cur][k]; commit(S.pagos[cur][k] ? "Fatura marcada como paga" : "Fatura em aberto"); });
+  document.querySelectorAll("[data-open-card]").forEach(c => c.onclick = e => { if (e.target.closest("[data-card]")) return; busca = conta(c.dataset.openCard).n; filtro = "tudo"; sub = "mes"; page = "lanc"; animate = true; render(); });
+  document.querySelectorAll("[data-card]").forEach(b => b.onclick = e => { e.stopPropagation(); (S.pagos[cur] ??= {}); const k = "card:" + b.dataset.card; S.pagos[cur][k] = !S.pagos[cur][k]; commit(S.pagos[cur][k] ? "Fatura marcada como paga" : "Fatura em aberto"); });
   if (cr.length) charts.push(new Chart($("#chFat"), { type: "bar", data: { labels: fut.map(f => short(f[0])), datasets: cr.map((a, i) => ({ label: a.n, data: fut.map(f => f[1][i]), backgroundColor: a.cor, borderRadius: 5 })) }, options: opts({ scales: { x: { stacked: true, grid: { display: false } }, y: { stacked: true, ticks: { callback: v => S.prefs.priv ? "" : brl0(v) } } } }) }));
 }
 function pgPessoas() {
@@ -313,13 +315,13 @@ function pgPessoas() {
      return `<button class="person" data-person="${p.id}"><div class="head"><div class="avatar" style="background:${p.cor}">${esc(p.n[0] || "?").toUpperCase()}</div><div><b>${esc(p.n)}</b><div class="hint" style="margin:0">${n ? n + " em aberto" : "tudo quitado"}</div></div></div>
      <div class="bal ${s > 0 ? "pos" : s < 0 ? "neg" : ""}"><span class="money num">${s === 0 ? "R$ 0,00" : brl(Math.abs(s))}</span></div><div class="hint" style="margin:0">${s > 0 ? "te deve" : s < 0 ? "você deve" : "sem pendências"}</div></button>`; }).join("") || empty("🤝", "Cadastre amigos para anotar quem te deve e a quem você deve.")}</section>`;
   $("#newPerson").onclick = () => editPerson();
-  $("#newDebt").onclick = () => S.pessoas.length ? editDebt() : editPerson(null, true);
+  $("#newDebt").onclick = () => editDebt();
   document.querySelectorAll("[data-person]").forEach(b => b.onclick = () => personSheet(b.dataset.person));
 }
 function personSheet(pid) {
   const p = pessoa(pid), ds = S.dividas.filter(d => d.pessoa === pid).sort((a, b) => (restante(b) > 0) - (restante(a) > 0) || b.data.localeCompare(a.data));
   openSheet(`<div class="panel"><div class="head" style="display:flex;gap:10px;align-items:center"><div class="avatar" style="background:${p.cor}">${esc(p.n[0]).toUpperCase()}</div><h2 style="flex:1">${esc(p.n)}</h2><button class="btn sm" id="pEdit">Editar</button></div>
-   <div class="list">${ds.map(d => { const r = restante(d); return `<div class="row" style="cursor:default;grid-template-columns:1fr auto"><div><div class="t">${esc(d.d)}</div><div class="m">${d.dir === "me_deve" ? "te deve" : "você deve"} · ${d.data.split("-").reverse().join("/")}${d.pagtos.length ? ` · pago <span class="money">${brl(d.v - r)}</span> de <span class="money">${brl(d.v)}</span>` : ""}</div></div>
+   <div class="list">${ds.map(d => { const r = restante(d); return `<div class="row" style="cursor:default;grid-template-columns:1fr auto"><div><div class="t">${esc(d.d)}</div><div class="m">${d.dir === "me_deve" ? "te deve" : "você deve"} · ${d.data.split("-").reverse().join("/")}${d.pagtos.length ? ` · ${d.dir === "me_deve" ? "já recebeu" : "já pagou"} <span class="money">${brl(d.v - r)}</span> de <span class="money">${brl(d.v)}</span>` : ""}</div></div>
      <div style="display:grid;justify-items:end;gap:4px"><span class="money num" style="color:${r <= 0 ? "var(--muted)" : d.dir === "me_deve" ? "var(--in)" : "var(--out)"}">${r <= 0 ? "quitado ✓" : brl(r)}</span>
      <span class="tools">${r > 0 ? `<button class="btn sm" data-pay-debt="${d.id}">Recebi/Paguei</button>` : ""}<button class="btn sm danger" data-del-debt="${d.id}" aria-label="Excluir">×</button></span></div></div>`; }).join("") || empty("✨", "Nada anotado com essa pessoa.")}</div>
    <div class="tools" style="justify-content:space-between"><button class="btn" id="pClose">Fechar</button><button class="btn acc" id="pAdd">+ Nova dívida</button></div></div>`, () => {
@@ -354,23 +356,28 @@ function editDebt(pid) {
   openSheet(`<form id="df"><h2>Registrar dívida</h2>
    <div class="seg" id="dSeg" style="grid-template-columns:1fr 1fr"><button type="button" data-d="me_deve" aria-pressed="true">Me deve</button><button type="button" data-d="devo" aria-pressed="false">Eu devo</button></div>
    <input class="amount num" id="dv" type="number" step="0.01" min="0.01" inputmode="decimal" placeholder="R$ 0,00" required aria-label="Valor" autofocus>
-   <label class="fld">Quem<select id="dp">${S.pessoas.map(p => `<option value="${p.id}" ${p.id === pid ? "selected" : ""}>${esc(p.n)}</option>`).join("")}</select></label>
+   <label class="fld">Quem<select id="dp">${S.pessoas.map(p => `<option value="${p.id}" ${p.id === pid ? "selected" : ""}>${esc(p.n)}</option>`).join("")}<option value="__new" ${S.pessoas.length ? "" : "selected"}>+ Nova pessoa…</option></select></label>
+   <label class="fld" id="dnWrap" ${S.pessoas.length ? "hidden" : ""}>Nome da nova pessoa<input id="dn" placeholder="Ex: Pedro"></label>
    <label class="fld">Referente a<input id="dd" required placeholder="Ex: metade do mercado"></label>
    <label class="fld">Data<input id="ddt" type="date" value="${today()}" required></label>
    <div class="tools" style="justify-content:flex-end"><button type="button" class="btn" id="dx">Cancelar</button><button class="btn acc">Salvar</button></div></form>`, () => {
     segBind($("#dSeg"), "d", v => dir = v); $("#dx").onclick = closeSheet;
-    $("#df").onsubmit = e => { e.preventDefault(); const p = $("#dp").value; S.dividas.push({ id: uid(), pessoa: p, dir, d: $("#dd").value.trim(), v: +$("#dv").value, data: $("#ddt").value, pagtos: [] }); commit("Dívida anotada"); personSheet(p); };
+    $("#dp").onchange = () => { $("#dnWrap").hidden = $("#dp").value !== "__new"; if (!$("#dnWrap").hidden) $("#dn").focus(); };
+    $("#df").onsubmit = e => { e.preventDefault(); let p = $("#dp").value;
+      if (!(+$("#dv").value > 0)) { $("#dv").focus(); return toast("Digite o valor da dívida"); }
+      if (!$("#dd").value.trim()) { $("#dd").focus(); return toast("Diga a que se refere a dívida"); }
+      if (p === "__new") { const n = $("#dn").value.trim(); if (!n) { $("#dn").focus(); return toast("Digite o nome da pessoa"); } p = uid(); S.pessoas.push({ id: p, n, cor: PAL[S.pessoas.length % PAL.length] }); } S.dividas.push({ id: uid(), pessoa: p, dir, d: $("#dd").value.trim(), v: +$("#dv").value, data: $("#ddt").value, pagtos: [] }); commit("Dívida anotada"); personSheet(p); };
   });
 }
 function pgFuturo() {
   const ms = []; for (let i = 0; i < 12; i++) { const k = addM(NOW, i); ms.push([k, calc(k)]); }
   let acc = 0; const media = ms.reduce((t, [, c]) => t + c.inv, 0) / 12;
   $("#view").innerHTML = `<section class="box anim"><h2>Próximos 12 meses</h2><p class="hint">Projeção com recorrentes e parcelas já lançados. Toque num mês para abrir.</p>
-   <div class="months anim">${ms.map(([k, c]) => { acc += c.saldo; return `<button class="mo ${c.saldo < 0 ? "neg" : ""}" data-go="${k}"><b>${short(k)}</b><span class="money num">${brl0(c.saldo)}</span><div style="font-size:12px;color:var(--muted)">acumulado <span class="money">${brl0(acc)}</span></div></button>`; }).join("")}</div></section>
+   <div class="months anim">${ms.map(([k, c]) => { acc += c.saldo; return `<button class="mo ${c.saldo < 0 ? "neg" : ""}" data-go="${k}"><b>${short(k)}</b><div class="mini">sobra no mês</div><span class="money num">${brl0(c.saldo)}</span><div style="font-size:12px;color:var(--muted)">somando desde hoje: <span class="money">${brl0(acc)}</span></div></button>`; }).join("")}</div></section>
    <section class="grid anim"><div class="box c7"><h2>Sobra e investimentos acumulados</h2><div class="chart"><canvas id="chProj"></canvas></div></div>
    <div class="box c5"><h2>Metas <button class="btn sm" id="newGoal">+ Nova meta</button></h2>${S.metas.map(g => { const p = Math.min(100, g.atual / g.alvo * 100), falta = g.alvo - g.atual;
      return `<div class="goal"><div class="top2"><span>${esc(g.d)}</span><span class="num">${Math.round(p)}%</span></div><div class="bar"><i style="width:${p}%"></i></div>
-     <div style="font-size:13px;color:var(--muted)"><span class="money">${brl0(g.atual)} de ${brl0(g.alvo)}</span> · ${falta <= 0 ? "meta batida 🎉" : media > 0 ? "no ritmo atual, ~" + Math.ceil(falta / media) + " meses" : "sem aportes mensais"}</div>
+     <div style="font-size:13px;color:var(--muted)"><span class="money">${brl0(g.atual)} de ${brl0(g.alvo)}</span> · ${falta <= 0 ? "meta batida 🎉" : `faltam <span class="money">${brl0(falta)}</span>`}</div>
      <div class="tools"><button class="btn sm" data-dep="${g.id}">Guardar dinheiro</button><button class="btn sm" data-gedit="${g.id}">Editar</button></div></div>`; }).join("") || empty("🎯", "Crie uma meta: reserva, viagem, carro…")}</div></section>`;
   document.querySelectorAll("[data-go]").forEach(b => b.onclick = () => { cur = b.dataset.go; page = "mes"; animate = true; render(); });
   document.querySelectorAll("[data-dep]").forEach(b => b.onclick = () => depositGoal(b.dataset.dep));
@@ -403,24 +410,24 @@ function editGoal(id) {
 function pgAjustes() {
   const tipos = { saida: "Gasto", entrada: "Entrada", invest: "Investimento" }, ctipos = { credito: "Crédito", debito: "Conta / débito", boleto: "Boleto" };
   $("#view").innerHTML = `<section class="grid anim" style="margin-top:0">
-   <div class="box c6"><h2>Categorias <button class="btn sm" id="addCat">+ Categoria</button></h2><p class="hint">Emoji, nome, cor, tipo e limite mensal (opcional). Alterações salvam sozinhas.</p>
+   <div class="box c6"><h2>Categorias <button class="btn sm" id="addCat">+ Categoria</button></h2><p class="hint">Toque na cor ou no emoji para trocar. Tudo salva sozinho.</p>
     <div class="set-list">${S.cats.map(c => `<div class="set-item" style="grid-template-columns:auto auto 1fr auto">
       <input class="swatch" type="color" value="${c.cor}" data-cat="${c.id}" data-k="cor" aria-label="Cor de ${esc(c.n)}">
       <input class="inline emoji" value="${esc(c.e)}" data-cat="${c.id}" data-k="e" aria-label="Emoji" maxlength="4">
       <div style="display:grid;gap:2px;min-width:0"><input class="inline" value="${esc(c.n)}" data-cat="${c.id}" data-k="n" aria-label="Nome" style="font-weight:700">
-       <div class="seg-row"><select class="inline" data-cat="${c.id}" data-k="tipo" aria-label="Tipo" style="width:auto;font-size:12px">${Object.entries(tipos).map(([k, t]) => `<option value="${k}" ${c.tipo === k ? "selected" : ""}>${t}</option>`).join("")}</select>
-       ${c.tipo === "saida" ? `<input class="inline" type="number" placeholder="sem limite" value="${c.lim || ""}" data-cat="${c.id}" data-k="lim" aria-label="Limite mensal" style="width:120px;font-size:12px">` : ""}</div></div>
+       <div class="set-fields"><label><span class="mini">Tipo</span><select class="inline" data-cat="${c.id}" data-k="tipo" style="width:auto;font-size:13px">${Object.entries(tipos).map(([k, t]) => `<option value="${k}" ${c.tipo === k ? "selected" : ""}>${t}</option>`).join("")}</select></label>
+       ${c.tipo === "saida" ? `<label><span class="mini">Limite por mês (R$)</span><input class="inline" type="number" placeholder="sem limite" value="${c.lim || ""}" data-cat="${c.id}" data-k="lim" style="width:120px;font-size:13px"></label>` : ""}</div></div>
       <button class="btn sm danger" data-delcat="${c.id}" aria-label="Excluir ${esc(c.n)}">×</button></div>`).join("")}</div></div>
    <div class="box c6"><h2>Cartões e contas <button class="btn sm" id="addConta">+ Cartão/conta</button></h2><p class="hint">Crédito tem vencimento e limite; a fatura é marcada inteira como paga.</p>
     <div class="set-list">${S.contas.map(c => `<div class="set-item" style="grid-template-columns:auto 1fr auto">
       <input class="swatch" type="color" value="${c.cor}" data-conta="${c.id}" data-k="cor" aria-label="Cor de ${esc(c.n)}">
       <div style="display:grid;gap:2px;min-width:0"><input class="inline" value="${esc(c.n)}" data-conta="${c.id}" data-k="n" aria-label="Nome" style="font-weight:700">
-       <div class="seg-row"><select class="inline" data-conta="${c.id}" data-k="tipo" aria-label="Tipo" style="width:auto;font-size:12px">${Object.entries(ctipos).map(([k, t]) => `<option value="${k}" ${c.tipo === k ? "selected" : ""}>${t}</option>`).join("")}</select>
-       ${c.tipo === "credito" ? `<input class="inline" type="number" min="1" max="31" placeholder="vence dia" value="${c.venc || ""}" data-conta="${c.id}" data-k="venc" aria-label="Dia de vencimento" style="width:92px;font-size:12px"><input class="inline" type="number" placeholder="limite" value="${c.limite || ""}" data-conta="${c.id}" data-k="limite" aria-label="Limite" style="width:100px;font-size:12px">` : ""}</div></div>
+       <div class="set-fields"><label><span class="mini">Tipo</span><select class="inline" data-conta="${c.id}" data-k="tipo" style="width:auto;font-size:13px">${Object.entries(ctipos).map(([k, t]) => `<option value="${k}" ${c.tipo === k ? "selected" : ""}>${t}</option>`).join("")}</select></label>
+       ${c.tipo === "credito" ? `<label><span class="mini">Vence dia</span><input class="inline" type="number" min="1" max="31" placeholder="—" value="${c.venc || ""}" data-conta="${c.id}" data-k="venc" style="width:70px;font-size:13px"></label><label><span class="mini">Limite (R$)</span><input class="inline" type="number" placeholder="—" value="${c.limite || ""}" data-conta="${c.id}" data-k="limite" style="width:100px;font-size:13px"></label>` : ""}</div></div>
       <button class="btn sm danger" data-delconta="${c.id}" aria-label="Excluir ${esc(c.n)}">×</button></div>`).join("")}</div></div>
    <div class="box c6"><h2>Aparência e privacidade</h2>
     <div class="fld" style="margin-top:10px">Tema<div class="seg" id="themeSeg">${[["auto", "Automático"], ["light", "Claro"], ["dark", "Escuro"]].map(([k, t]) => `<button data-t="${k}" aria-pressed="${S.prefs.theme === k}">${t}</button>`).join("")}</div></div>
-    <label class="note" style="cursor:pointer;align-items:center"><input type="checkbox" id="privDef" ${S.prefs.priv ? "checked" : ""}> Esconder valores (o mesmo que o botão do olho no topo)</label></div>
+    <label class="pref"><input type="checkbox" id="privDef" ${S.prefs.priv ? "checked" : ""}> Esconder valores (o mesmo que o botão do olho 👁 no topo)</label></div>
    <div class="box c6"><h2>Conta</h2><p class="hint">${Store.mode === "demo" ? "Você está no modo demonstração: os dados ficam só neste aparelho." : "Conectado como <b>" + esc(Store.user?.email) + "</b>. Seus dados são criptografados antes de sair do aparelho: nem o administrador consegue ler."}</p>
     <div class="tools">${Store.mode === "cloud" ? '<button class="btn" id="chPw">Trocar senha</button>' : ""}<button class="btn" id="expBtn">Baixar backup</button><label class="btn" style="cursor:pointer">Restaurar backup<input type="file" id="impFile" accept="application/json" hidden></label><button class="btn" id="outBtn">${Store.mode === "demo" ? "Sair do demo" : "Sair"}</button></div>
     <div class="tools" style="margin-top:10px">${Store.mode === "demo" ? '<button class="btn" id="resetDemo">Recomeçar com dados de exemplo</button>' : ""}<button class="btn danger" id="wipe">Apagar todos os dados</button></div></div>
@@ -432,8 +439,9 @@ function pgAjustes() {
     confirmBox("Excluir categoria?", used ? `${used} lançamento(s) usam esta categoria e vão ficar “Sem categoria”.` : "Nenhum lançamento usa esta categoria.", "Excluir", () => { const snap = snapshot(); S.cats = S.cats.filter(c => c.id !== id); commit("Categoria excluída", restoreFrom(snap)); }); });
   v.querySelectorAll("[data-delconta]").forEach(b => b.onclick = () => { const id = b.dataset.delconta, used = [...S.recorrentes, ...S.parcelas, ...S.avulsos].filter(x => x.conta === id).length;
     confirmBox("Excluir cartão/conta?", used ? `${used} lançamento(s) usam este cartão e vão ficar “Sem conta”.` : "Nenhum lançamento usa este cartão.", "Excluir", () => { const snap = snapshot(); S.contas = S.contas.filter(c => c.id !== id); commit("Excluído", restoreFrom(snap)); }); });
-  $("#addCat").onclick = () => { S.cats.push({ id: uid(), n: "Nova categoria", e: "🏷️", cor: PAL[S.cats.length % PAL.length], tipo: "saida" }); commit("Categoria criada — edite o nome"); const ins = document.querySelectorAll('[data-k="n"][data-cat]'); ins[ins.length - 1]?.select(); };
-  $("#addConta").onclick = () => { S.contas.push({ id: uid(), n: "Novo cartão", cor: PAL[S.contas.length % PAL.length], tipo: "credito", venc: 10 }); commit("Cartão criado — edite o nome"); const ins = document.querySelectorAll('[data-k="n"][data-conta]'); ins[ins.length - 1]?.select(); };
+  const focusNew = sel => { const ins = document.querySelectorAll(sel), el = ins[ins.length - 1]; if (!el) return; el.closest(".set-item").scrollIntoView({ behavior: "smooth", block: "center" }); el.closest(".set-item").animate([{ background: "var(--accent-2)" }, { background: "var(--soft)" }], 1600); setTimeout(() => el.select(), 350); };
+  $("#addCat").onclick = () => { S.cats.push({ id: uid(), n: "Nova categoria", e: "🏷️", cor: PAL[S.cats.length % PAL.length], tipo: "saida" }); commit("Categoria criada — digite o nome"); focusNew('[data-k="n"][data-cat]'); };
+  $("#addConta").onclick = () => { S.contas.push({ id: uid(), n: "Novo cartão", cor: PAL[S.contas.length % PAL.length], tipo: "credito" }); commit("Cartão criado — digite o nome"); focusNew('[data-k="n"][data-conta]'); };
   segBind($("#themeSeg"), "t", t => { S.prefs.theme = t; commit(); });
   $("#privDef").onchange = e => { S.prefs.priv = e.target.checked; commit(); };
   $("#expBtn").onclick = () => { const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([JSON.stringify(S, null, 1)], { type: "application/json" })); a.download = "caixaverde-backup-" + today() + ".json"; a.click(); toast("Backup baixado"); };
@@ -448,25 +456,39 @@ function pgAjustes() {
 /* ---------- lançar / editar ---------- */
 function itemForm(opts) {
   const { title, it = {}, tipo: t0 = "saida", rep: r0 = "uma", editing } = opts;
-  let tipo = it.tipo || t0, rep = r0;
-  const catOpts = t => S.cats.filter(c => c.tipo === t).map(c => `<option value="${c.id}" ${c.id === it.cat ? "selected" : ""}>${c.e} ${esc(c.n)}</option>`).join("") || `<option value="">(crie uma categoria em Ajustes)</option>`;
+  let tipo = it.tipo || t0, rep = r0, modoParc = "parcela", catTouched = !!it.cat;
+  const lastCat = t => { const l = [...S.avulsos, ...S.recorrentes, ...S.parcelas.map(p => ({ ...p, tipo: "saida" }))].filter(x => (x.tipo || "saida") === t && S.cats.some(c => c.id === x.cat)).pop(); return l?.cat; };
+  const sel = t => it.cat && S.cats.find(c => c.id === it.cat)?.tipo === t ? it.cat : lastCat(t);
+  const catOpts = t => { const s = sel(t); return S.cats.filter(c => c.tipo === t).map(c => `<option value="${c.id}" ${c.id === s ? "selected" : ""}>${c.e} ${esc(c.n)}</option>`).join("") || `<option value="">(crie uma categoria em Ajustes)</option>`; };
+  const guess = d => { const t = d.toLowerCase(); const hit = S.cats.filter(c => c.tipo === tipo).find(c => t.includes(c.n.toLowerCase().slice(0, 5)));
+    if (hit) return hit.id; const kw = { alimentacao: /mercad|lanche|pizza|ifood|restaur|padaria|caf[eé]|a[cç]ougue|almo[cç]o|jantar/, transporte: /uber|gasolina|combust|[oô]nibus|estacion|ped[aá]gio|99/, saude: /farm[aá]cia|m[eé]dic|rem[eé]dio|consulta|dentista/, lazer: /cinema|show|bar|festa|viagem|jogo/, assinaturas: /netflix|spotify|prime|disney|youtube|assinatura/, moradia: /aluguel|condom[ií]nio|luz|[aá]gua|g[aá]s|internet/, compras: /roupa|t[eê]nis|celular|loja|shopee|amazon|shein/ };
+    for (const [id, re] of Object.entries(kw)) if (re.test(t) && S.cats.some(c => c.id === id && c.tipo === tipo)) return id; return null; };
   const defConta = it.conta || (S.contas.find(c => c.tipo === "debito") || S.contas[0] || {}).id;
   const dataDef = it.data || (it.inicio ? it.inicio + "-" + String(it.dia || 1).padStart(2, "0") : cur === NOW ? today() : cur + "-01");
   openSheet(`<form id="lf" novalidate><h2>${title}</h2>
    <div class="seg" id="tSeg">${[["saida", "Saída"], ["entrada", "Entrada"], ["invest", "Investir"]].map(([k, t]) => `<button type="button" data-t="${k}" aria-pressed="${tipo === k}">${t}</button>`).join("")}</div>
-   <input class="amount num" id="lv" type="number" step="0.01" min="0.01" inputmode="decimal" placeholder="R$ 0,00" aria-label="Valor" value="${it.v ?? ""}" autofocus>
+   <input class="amount num" id="lv" type="number" step="0.01" min="0.01" inputmode="decimal" placeholder="R$ 0,00" aria-label="Valor" value="${it.v != null ? (+it.v).toFixed(2) : ""}" autofocus>
    <label class="fld">Descrição<input id="ld" placeholder="Ex: Mercado" value="${esc(it.d || "")}"></label>
    <div class="two"><label class="fld">Categoria<select id="lc">${catOpts(tipo)}</select></label>
     <label class="fld">${tipo === "entrada" ? "Recebido em" : "Pago com"}<select id="lk">${S.contas.map(a => `<option value="${a.id}" ${a.id === defConta ? "selected" : ""}>${esc(a.n)}</option>`).join("")}</select></label></div>
    <label class="fld"><span id="dtLbl">${rep === "mes" ? "Começa em" : rep === "parc" ? "Data da compra" : "Data"}</span><input id="ldt" type="date" value="${dataDef}"></label>
    ${editing ? "" : `<div class="fld">Repete?<div class="repeat" id="rSeg"><button type="button" data-r="uma" aria-pressed="${rep === "uma"}">Só uma vez</button><button type="button" data-r="mes" aria-pressed="${rep === "mes"}">Todo mês</button><button type="button" data-r="parc" aria-pressed="${rep === "parc"}">Parcelado</button></div></div>`}
-   <label class="fld" id="lnWrap" ${rep === "parc" ? "" : "hidden"}>Em quantas parcelas? (o valor acima é o de cada parcela)<input id="ln" type="number" min="2" max="72" value="${it.n || 3}"></label>
+   <div class="fld" id="lnWrap" ${rep === "parc" ? "" : "hidden"}>
+     <div class="seg" id="pSeg" style="grid-template-columns:1fr 1fr"><button type="button" data-m="parcela" aria-pressed="true">Digitei o valor da parcela</button><button type="button" data-m="total" aria-pressed="false">Digitei o valor total</button></div>
+     <label class="fld">Em quantas parcelas?<input id="ln" type="number" min="2" max="72" value="${it.n || 3}"></label>
+     <div class="preview" id="pPrev"></div></div>
    ${!editing && S.pessoas.length ? `<details id="splitBox"><summary class="fld" style="cursor:pointer;display:list-item">Alguém vai te pagar uma parte?</summary><div class="two" style="margin-top:8px"><label class="fld">Quem<select id="sp"><option value="">ninguém</option>${S.pessoas.map(p => `<option value="${p.id}">${esc(p.n)}</option>`).join("")}</select></label><label class="fld">Quanto<input id="sv" type="number" step="0.01" placeholder="metade?"></label></div></details>` : ""}
    ${opts.extra || ""}
    <div class="err" id="lerr"></div>
    <div class="tools" style="justify-content:space-between">${editing ? '<button type="button" class="btn danger" id="ldel">Excluir</button>' : "<span></span>"}<span class="tools"><button type="button" class="btn" id="lx">Cancelar</button><button class="btn acc" id="lsave">Salvar</button></span></div></form>`, sh => {
-    segBind($("#tSeg"), "t", v => { tipo = v; $("#lc").innerHTML = catOpts(v); const p = sh.querySelector('[data-r="parc"]'); if (p) p.hidden = v !== "saida"; if (v !== "saida" && rep === "parc") sh.querySelector('[data-r="uma"]').click(); });
-    if ($("#rSeg")) segBind($("#rSeg"), "r", v => { rep = v; $("#lnWrap").hidden = v !== "parc"; $("#dtLbl").textContent = v === "mes" ? "Começa em" : v === "parc" ? "Data da compra" : "Data"; });
+    const prev = () => { const v = +$("#lv").value || 0, n = Math.max(2, +$("#ln").value || 2), dt = $("#ldt").value || today(); const pv = modoParc === "total" ? v / n : v;
+      $("#pPrev").textContent = v ? `${n}× de ${brl(pv)} = ${brl(pv * n)} · última parcela em ${label(addM(dt.slice(0, 7), n - 1)).toLowerCase()}` : ""; };
+    segBind($("#pSeg"), "m", v => { modoParc = v; prev(); });
+    ["#lv", "#ln", "#ldt"].forEach(s => $(s).addEventListener("input", prev)); prev();
+    $("#lc").onchange = () => catTouched = true;
+    $("#ld").addEventListener("input", () => { if (catTouched) return; const g = guess($("#ld").value); if (g) $("#lc").value = g; });
+    segBind($("#tSeg"), "t", v => { tipo = v; $("#lc").innerHTML = catOpts(v); catTouched = false; const p = sh.querySelector('[data-r="parc"]'); if (p) p.hidden = v !== "saida"; if (v !== "saida" && rep === "parc") sh.querySelector('[data-r="uma"]').click(); $("#lk").closest("label").firstChild.textContent = v === "entrada" ? "Recebido em" : "Pago com"; });
+    if ($("#rSeg")) segBind($("#rSeg"), "r", v => { rep = v; $("#lnWrap").hidden = v !== "parc"; $("#dtLbl").textContent = v === "mes" ? "Começa em" : v === "parc" ? "Data da compra" : "Data"; prev(); });
     $("#lx").onclick = closeSheet;
     if ($("#sv")) $("#sv").onfocus = () => { if (!$("#sv").value && $("#lv").value) $("#sv").value = (+$("#lv").value / 2).toFixed(2); };
     $("#lf").onsubmit = e => {
@@ -474,7 +496,8 @@ function itemForm(opts) {
       const v = +$("#lv").value, d = $("#ld").value.trim(), dt = $("#ldt").value;
       const bad = !(v > 0) ? ["#lv", "Digite um valor maior que zero."] : !d ? ["#ld", "Dê um nome para o lançamento."] : !dt ? ["#ldt", "Escolha a data."] : null;
       if (bad) { $("#lerr").textContent = bad[1]; const f = $(bad[0]); f.focus(); f.classList.remove("shake"); f.offsetWidth; f.classList.add("shake"); return; }
-      opts.onSave({ tipo, rep, v, d, dt, cat: $("#lc").value, conta: $("#lk").value, n: Math.max(2, +$("#ln").value || 2), split: $("#sp")?.value ? { p: $("#sp").value, v: +$("#sv").value || v / 2 } : null });
+      const n = Math.max(2, +$("#ln").value || 2);
+      opts.onSave({ tipo, rep, v: rep === "parc" && modoParc === "total" ? Math.round(v / n * 100) / 100 : v, d, dt, cat: $("#lc").value, conta: $("#lk").value, n, split: $("#sp")?.value ? { p: $("#sp").value, v: +$("#sv").value || v / 2 } : null });
     };
     opts.bind?.(sh);
   });
@@ -518,7 +541,7 @@ document.addEventListener("click", e => { if (e.target.closest("[data-new]")) ne
 function opts(o) {
   Chart.defaults.font.family = "DM Sans, system-ui, sans-serif"; Chart.defaults.color = css("--muted"); Chart.defaults.borderColor = css("--line");
   const priv = S.prefs.priv;
-  return Object.assign({ responsive: true, maintainAspectRatio: false, animation: { duration: 900, easing: "easeOutQuart" },
+  return Object.assign({ responsive: true, maintainAspectRatio: false, animation: { duration: 900, easing: "easeOutQuart" }, layout: { padding: { right: 8, top: 6 } },
     plugins: { legend: { position: "bottom", labels: { boxWidth: 9, boxHeight: 9, useBorderRadius: true, borderRadius: 3 } },
       tooltip: { enabled: !priv, callbacks: { label: x => " " + (x.dataset.label || x.label) + ": " + brl(x.raw) } } } }, o);
 }
