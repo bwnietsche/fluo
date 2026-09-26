@@ -140,6 +140,54 @@
     };
   }
 
+  /* ---------- ícones próprios (no lugar de emoji) ---------- */
+  const ICONS = {
+    salario: '<rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M3 12h18"/>',
+    extra: '<path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8L12 3z"/>',
+    invest: '<path d="M3 17l6-6 4 4 7-8"/><path d="M15 6h5v5"/>',
+    moradia: '<path d="M4 11l8-7 8 7"/><path d="M6 10v9h12v-9"/><path d="M10 19v-5h4v5"/>',
+    contas: '<path d="M6 3h12v18l-3-2-3 2-3-2-3 2V3z"/><path d="M9 8h6M9 12h6"/>',
+    transporte: '<path d="M4 16l1.5-5A2 2 0 0 1 7.4 9.5h9.2A2 2 0 0 1 18.5 11L20 16"/><rect x="3" y="16" width="18" height="4" rx="1.5"/><circle cx="7.5" cy="18" r="1.2"/><circle cx="16.5" cy="18" r="1.2"/>',
+    alimentacao: '<path d="M7 3v8a2 2 0 0 0 4 0V3"/><path d="M9 11v10"/><path d="M16 3c-1.5 0-2.5 1.5-2.5 4s1 4 2.5 4v10"/>',
+    assinaturas: '<rect x="3" y="5" width="18" height="12" rx="2"/><path d="M8 21h8"/>',
+    saude: '<path d="M12 20s-7-4.4-9.3-9A5 5 0 0 1 12 6a5 5 0 0 1 9.3 5c-2.3 4.6-9.3 9-9.3 9z"/>',
+    lazer: '<path d="M4 8a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v2a2 2 0 0 0 0 4v2a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-2a2 2 0 0 0 0-4V8z"/><path d="M14 6v12" stroke-dasharray="2 3"/>',
+    compras: '<path d="M6 8h12l-1 12H7L6 8z"/><path d="M9 8V6a3 3 0 0 1 6 0v2"/>',
+    outros: '<circle cx="6" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="18" cy="12" r="1.4" fill="currentColor" stroke="none"/>',
+    tag: '<path d="M3 11.5V5a1 1 0 0 1 1-1h6.5L21 14.5 12.5 23 3 13.5z"/><circle cx="8" cy="8" r="1.4" fill="currentColor" stroke="none"/>',
+    search: '<circle cx="10.5" cy="10.5" r="6.5"/><path d="M20 20l-4.8-4.8" stroke-linecap="round"/>',
+    repeat: '<path d="M4 7h11a4 4 0 0 1 4 4v1"/><path d="M20 17H9a4 4 0 0 1-4-4v-1"/><path d="M12 4l3 3-3 3M12 20l-3-3 3-3"/>',
+    card: '<rect x="2.5" y="5.5" width="19" height="13" rx="2.5"/><path d="M2.5 10h19"/>',
+    target: '<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r="0.8" fill="currentColor" stroke="none"/>',
+    receipt: '<path d="M6 3h12v18l-3-2-3 2-3-2-3 2V3z"/><path d="M9 8h6M9 12h6M9 16h4"/>',
+    chart: '<path d="M4 20V10M10 20V4M16 20v-7M4 20h16"/>',
+    handshake: '<path d="M2 12l5-4 4 3 4-3 5 4"/><path d="M9 11l3 2.5L15 11"/><path d="M2 12v3l5 4 4-3 4 3 5-4v-3"/>',
+    wave: '<path d="M4 15c1.5-4 3-6 3-9a2 2 0 0 1 4 0v6"/><path d="M11 6a2 2 0 0 1 4 0v5"/><path d="M15 7a2 2 0 0 1 4 0v6"/><path d="M19 10a2 2 0 0 1 3 1.7c0 4.6-2.7 9.3-8 9.3-4 0-6-2-8-5l-2.3-4A1.8 1.8 0 0 1 7 9.8L8 12"/>',
+    plus: '<path d="M12 5v14M5 12h14"/>',
+    eye: '<path d="M1.5 12S5.5 4.5 12 4.5 22.5 12 22.5 12 18.5 19.5 12 19.5 1.5 12 1.5 12z"/><circle cx="12" cy="12" r="3.2"/>',
+    settings: '<circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 0 0-.1-1.2l2-1.6-2-3.4-2.4.7a7 7 0 0 0-2-1.2L14 3h-4l-.5 2.3a7 7 0 0 0-2 1.2l-2.4-.7-2 3.4 2 1.6a7 7 0 0 0 0 2.4l-2 1.6 2 3.4 2.4-.7a7 7 0 0 0 2 1.2L10 21h4l.5-2.3a7 7 0 0 0 2-1.2l2.4.7 2-3.4-2-1.6a7 7 0 0 0 .1-1.2z"/>',
+  };
+  function iconSVG(key, size) {
+    const d = ICONS[key]; if (!d) return null;
+    return `<svg viewBox="0 0 24 24" width="${size || 20}" height="${size || 20}" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
+  }
+  function enhanceIcon(inp) {
+    if (inp.dataset.cx) return; inp.dataset.cx = "1";
+    const btn = document.createElement("button"); btn.type = "button"; btn.className = "cicon";
+    btn.setAttribute("aria-label", inp.getAttribute("aria-label") || "Ícone"); btn.setAttribute("aria-haspopup", "dialog"); btn.setAttribute("aria-expanded", "false");
+    const paint = () => btn.innerHTML = iconSVG(inp.value, 20) || esc(inp.value) || iconSVG("tag", 20);
+    paint(); inp.after(btn); inp.classList.add("cx-hidden"); inp.tabIndex = -1;
+    btn.onclick = () => {
+      if (open?.anchor === btn) return closeAll();
+      const pop = popover(btn, "cicons", p => {
+        p.innerHTML = Object.keys(ICONS).map((k, i) => `<button type="button" class="cicn${k === inp.value ? " sel" : ""}" data-i="${k}" style="--d:${i * 10}ms" aria-label="${k}">${iconSVG(k, 22)}</button>`).join("");
+        p.querySelectorAll(".cicn").forEach(b => b.onclick = () => { inp.value = b.dataset.i; paint(); fire(inp); closeAll(); btn.focus(); });
+      });
+      (pop.querySelector(".sel") || pop.firstChild).focus({ preventScroll: true });
+    };
+  }
+  const esc = s => (s || "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
   /* ---------- ver/ocultar senha ---------- */
   const EYE = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M1.5 12S5.5 4.5 12 4.5 22.5 12 22.5 12 18.5 19.5 12 19.5 1.5 12 1.5 12z"/><circle cx="12" cy="12" r="3.2"/></svg>';
   const EYE_OFF = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M1.5 12S5.5 4.5 12 4.5 22.5 12 22.5 12 18.5 19.5 12 19.5 1.5 12 1.5 12z"/><circle cx="12" cy="12" r="3.2"/><path d="M3 3l18 18" stroke-linecap="round"/></svg>';
@@ -165,7 +213,9 @@
       root.querySelectorAll('input[type="date"]').forEach(enhanceDate);
       root.querySelectorAll('input[type="color"]').forEach(enhanceColor);
       root.querySelectorAll('input[type="password"]').forEach(enhancePassword);
+      root.querySelectorAll("input.emoji").forEach(enhanceIcon);
     },
     close: closeAll,
   };
+  window.Icons = { render: iconSVG, keys: Object.keys(ICONS) };
 })();

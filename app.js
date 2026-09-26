@@ -24,18 +24,18 @@ function baseState() {
     v: 1,
     prefs: { theme: "auto", priv: false },
     cats: [
-      { id: "salario", n: "Salário", e: "💼", cor: "#0e8f7e", tipo: "entrada" },
-      { id: "extra", n: "Renda extra", e: "✨", cor: "#3cc9b3", tipo: "entrada" },
-      { id: "invest", n: "Investimento", e: "📈", cor: "#5663e8", tipo: "invest" },
-      { id: "moradia", n: "Moradia", e: "🏠", cor: "#8a6fd1", tipo: "saida" },
-      { id: "contas", n: "Contas", e: "📄", cor: "#6b7389", tipo: "saida" },
-      { id: "transporte", n: "Transporte", e: "🚗", cor: "#1b9ad1", tipo: "saida" },
-      { id: "alimentacao", n: "Alimentação", e: "🍽️", cor: "#e0533d", tipo: "saida" },
-      { id: "assinaturas", n: "Assinaturas", e: "📺", cor: "#b04fa6", tipo: "saida" },
-      { id: "saude", n: "Saúde", e: "💊", cor: "#7a8a3a", tipo: "saida" },
-      { id: "lazer", n: "Lazer", e: "🎟️", cor: "#c98a12", tipo: "saida" },
-      { id: "compras", n: "Compras", e: "🛍️", cor: "#d85a5a", tipo: "saida" },
-      { id: "outros", n: "Outros", e: "•", cor: "#8b93ab", tipo: "saida" }],
+      { id: "salario", n: "Salário", e: "salario", cor: "#0e8f7e", tipo: "entrada" },
+      { id: "extra", n: "Renda extra", e: "extra", cor: "#3cc9b3", tipo: "entrada" },
+      { id: "invest", n: "Investimento", e: "invest", cor: "#5663e8", tipo: "invest" },
+      { id: "moradia", n: "Moradia", e: "moradia", cor: "#8a6fd1", tipo: "saida" },
+      { id: "contas", n: "Contas", e: "contas", cor: "#6b7389", tipo: "saida" },
+      { id: "transporte", n: "Transporte", e: "transporte", cor: "#1b9ad1", tipo: "saida" },
+      { id: "alimentacao", n: "Alimentação", e: "alimentacao", cor: "#e0533d", tipo: "saida" },
+      { id: "assinaturas", n: "Assinaturas", e: "assinaturas", cor: "#b04fa6", tipo: "saida" },
+      { id: "saude", n: "Saúde", e: "saude", cor: "#7a8a3a", tipo: "saida" },
+      { id: "lazer", n: "Lazer", e: "lazer", cor: "#c98a12", tipo: "saida" },
+      { id: "compras", n: "Compras", e: "compras", cor: "#d85a5a", tipo: "saida" },
+      { id: "outros", n: "Outros", e: "outros", cor: "#8b93ab", tipo: "saida" }],
     contas: [
       { id: "debito", n: "Débito / Pix", cor: "#8a6fd1", tipo: "debito" },
       { id: "boleto", n: "Boleto", cor: "#d85a5a", tipo: "boleto" }],
@@ -43,8 +43,9 @@ function baseState() {
   };
 }
 let S = null, cur = NOW, page = "mes", sub = "mes", filtro = "tudo", busca = "", animate = true, charts = [];
-const cat = id => S.cats.find(c => c.id === id) || { n: "Sem categoria", e: "•", cor: "#8b93ab" };
+const cat = id => S.cats.find(c => c.id === id) || { n: "Sem categoria", e: "outros", cor: "#8b93ab" };
 const conta = id => S.contas.find(c => c.id === id) || { n: "Sem conta", cor: "#8b93ab", tipo: "debito" };
+const ic = (key, size) => (window.Icons && Icons.render(key, size)) || esc(key || "•");
 const pessoa = id => S.pessoas.find(p => p.id === id) || { n: "?", cor: "#8b93ab" };
 
 /* ---------- cálculo ---------- */
@@ -127,7 +128,7 @@ const closeSheet = () => { Controls.close(); $("#sheet").hidden = true; };
 $("#sheet").addEventListener("click", e => { if (e.target.id === "sheet") closeSheet(); });
 addEventListener("keydown", e => { if (e.key === "Escape") closeSheet(); });
 function segBind(el, attr, fn) { el.onclick = e => { const b = e.target.closest("button"); if (!b || !el.contains(b)) return; el.querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", x === b)); fn(b.dataset[attr]); }; }
-const empty = (emoji, t, btn) => `<div class="empty"><div class="blob">${emoji}</div><div>${t}</div>${btn || ""}</div>`;
+const empty = (icon, t, btn) => `<div class="empty"><div class="blob">${ic(icon, 24)}</div><div>${t}</div>${btn || ""}</div>`;
 function confirmBox(title, text, okLabel, onOk) {
   openSheet(`<div class="panel"><h2>${esc(title)}</h2><p class="hint">${text}</p><div class="tools" style="justify-content:flex-end"><button class="btn" id="cNo">Cancelar</button><button class="btn pri" id="cOk" style="background:var(--out);border-color:var(--out)">${esc(okLabel)}</button></div></div>`,
     () => { $("#cNo").onclick = closeSheet; $("#cOk").onclick = () => { closeSheet(); onOk(); }; });
@@ -191,7 +192,7 @@ function rowHTML(x) {
   const tag = x.src === "rec" ? `<span class="tag rec">todo mês</span>` : x.src === "parc" ? `<span class="tag ${x.idx === x.n ? "last" : "parc"}">${x.idx}/${x.n}${x.idx === x.n ? " · última" : ""}</span>` : "";
   const sign = x.tipo === "entrada" ? "+ " : x.tipo === "invest" ? "→ " : "− ";
   return `<div class="row ${canCheck && paid ? "done" : ""}" data-edit="${x.src}:${x.id}" role="button" tabindex="0" aria-label="Editar ${esc(x.d)}">
-   <div class="ic" style="background:color-mix(in srgb,${k.cor} 16%,transparent)">${k.e}</div>
+   <div class="ic" style="background:color-mix(in srgb,${k.cor} 16%,transparent);color:${k.cor}">${ic(k.e)}</div>
    <div><div class="t">${esc(x.d)}</div><div class="m"><span class="dot" style="background:${c.cor}"></span>${esc(c.n)} · dia ${x.dia} ${tag}</div></div>
    <div class="val ${x.tipo === "entrada" ? "in" : x.tipo === "invest" ? "inv" : "out"}"><span class="money">${sign}${brl(x.v).replace("−", "")}</span></div>
    <button class="check ${canCheck ? "" : "na"}" data-pay="${x.id}" aria-pressed="${paid}" aria-label="${paid ? "Pago" : "Marcar como pago"}" title="${paid ? "Pago" : "Marcar como pago"}">✓</button></div>`;
@@ -203,7 +204,7 @@ function bindRows(root) {
 function notes(c) {
   const n = [];
   if (c.saldo < 0) n.push(["bad", `Mês no vermelho: faltam ${money(-c.saldo)} para fechar.`]);
-  S.cats.filter(k => k.lim).forEach(k => { const v = c.porCat[k.id] || 0; if (v > k.lim) n.push(["bad", `${k.e} ${esc(k.n)} passou do limite: ${money(v)} de ${money(k.lim)}.`]); else if (v >= k.lim * .8) n.push(["", `${k.e} ${esc(k.n)} já usou ${Math.round(v / k.lim * 100)}% do limite.`]); });
+  S.cats.filter(k => k.lim).forEach(k => { const v = c.porCat[k.id] || 0; if (v > k.lim) n.push(["bad", `${esc(k.n)} passou do limite: ${money(v)} de ${money(k.lim)}.`]); else if (v >= k.lim * .8) n.push(["", `${esc(k.n)} já usou ${Math.round(v / k.lim * 100)}% do limite.`]); });
   const ult = c.it.filter(x => x.src === "parc" && x.idx === x.n);
   if (ult.length) n.push(["good", `Última parcela de ${ult.map(x => esc(x.d)).join(", ")}: sobra ${money(ult.reduce((t, x) => t + x.v, 0))} a mais no mês que vem.`]);
   S.contas.filter(k => k.tipo === "credito" && c.porConta[k.id] && !S.pagos[cur]?.["card:" + k.id] && diffM(cur, NOW) >= 0).forEach(k => n.push(["", `Fatura ${esc(k.n)} de ${money(c.porConta[k.id])} vence dia ${k.venc || "?"}.`]));
@@ -215,10 +216,10 @@ function pgMes() {
   const c = calc(cur);
   $("#view").innerHTML = `<div class="anim">${flow(c)}</div><section class="grid anim">
    <div class="box c7"><h2>Movimentação <small>${c.it.length} ${c.it.length === 1 ? "item" : "itens"}</small></h2>
-     <div class="list">${c.it.slice(0, 8).map(rowHTML).join("") || empty("🧾", "Nenhum lançamento neste mês.", `<button class="btn acc" data-new>Fazer o primeiro lançamento</button>`)}</div>
+     <div class="list">${c.it.slice(0, 8).map(rowHTML).join("") || empty("receipt", "Nenhum lançamento neste mês.", `<button class="btn acc" data-new>Fazer o primeiro lançamento</button>`)}</div>
      ${c.it.length > 8 ? `<button class="btn" data-p="lanc" style="margin-top:10px">Ver todos os ${c.it.length}</button>` : ""}</div>
    <div class="box c5"><h2>Atenção</h2>${notes(c)}</div>
-   <div class="box c6"><h2>Gastos por categoria</h2>${c.sai ? '<div class="chart"><canvas id="chCat"></canvas></div>' : empty("🍩", "Sem gastos neste mês.")}</div>
+   <div class="box c6"><h2>Gastos por categoria</h2>${c.sai ? '<div class="chart"><canvas id="chCat"></canvas></div>' : empty("chart", "Sem gastos neste mês.")}</div>
    <div class="box c6"><h2>Meses anteriores e próximos</h2><div class="chart"><canvas id="chEv"></canvas></div></div></section>`;
   bindRows($("#view"));
   if (c.sai) catChart("chCat", c.porCat);
@@ -234,19 +235,18 @@ function pgLanc() {
     const byDay = {}; it.forEach(x => (byDay[x.dia] ??= []).push(x));
     body = `<section class="box"><div class="filters">${[["tudo", "Tudo"], ["saida", "Saídas"], ["entrada", "Entradas"], ["aberto", "A pagar"]].map(([k, t]) => `<button class="pillbtn" data-f="${k}" aria-pressed="${filtro === k}">${t}</button>`).join("")}
      <input class="search" id="busca" type="search" placeholder="Buscar por nome, categoria ou cartão" value="${esc(busca)}" aria-label="Buscar"></div>
-     <div class="list">${Object.keys(byDay).sort((a, b) => b - a).map(d => `<div class="day">Dia ${d}</div>` + byDay[d].map(rowHTML).join("")).join("") || empty("🔍", busca || filtro !== "tudo" ? "Nada encontrado com esse filtro." : "Nenhum lançamento neste mês.")}</div>
+     <div class="list">${Object.keys(byDay).sort((a, b) => b - a).map(d => `<div class="day">Dia ${d}</div>` + byDay[d].map(rowHTML).join("")).join("") || empty("search", busca || filtro !== "tudo" ? "Nada encontrado com esse filtro." : "Nenhum lançamento neste mês.")}</div>
      <p class="hint" style="margin-top:10px">Toque em um lançamento para editar ou excluir.</p></section>`;
   } else if (sub === "rec") {
     const grp = [["entrada", "Entradas fixas"], ["saida", "Contas e assinaturas"], ["invest", "Aportes"]];
     body = `<section class="grid auto anim" style="margin-top:0">${grp.map(([t, h]) => { const l = S.recorrentes.filter(r => r.tipo === t); const ativos = l.filter(r => !r.fim || diffM(NOW, r.fim) >= 0);
-      return `<div class="box c4"><h2>${h}<small class="money">${brl(ativos.reduce((s, r) => s + r.v, 0))}/mês</small></h2><div class="list">${l.map(r => `<div class="row" data-edit="rec:${r.id}" role="button" tabindex="0"><div class="ic" style="background:color-mix(in srgb,${cat(r.cat).cor} 16%,transparent)">${cat(r.cat).e}</div><div><div class="t">${esc(r.d)}</div><div class="m"><span class="dot" style="background:${conta(r.conta).cor}"></span>${esc(conta(r.conta).n)} · dia ${r.dia} · ${r.fim ? "até " + short(r.fim) : "desde " + short(r.inicio)}</div></div><div class="val"><span class="money">${brl(r.v)}</span></div><span></span></div>`).join("") || empty("🔁", "Nada aqui ainda.")}</div></div>`; }).join("")}</section>
+      return `<div class="box c4"><h2>${h}<small class="money">${brl(ativos.reduce((s, r) => s + r.v, 0))}/mês</small></h2><div class="list">${l.map(r => `<div class="row" data-edit="rec:${r.id}" role="button" tabindex="0"><div class="ic" style="background:color-mix(in srgb,${cat(r.cat).cor} 16%,transparent);color:${cat(r.cat).cor}">${ic(cat(r.cat).e)}</div><div><div class="t">${esc(r.d)}</div><div class="m"><span class="dot" style="background:${conta(r.conta).cor}"></span>${esc(conta(r.conta).n)} · dia ${r.dia} · ${r.fim ? "até " + short(r.fim) : "desde " + short(r.inicio)}</div></div><div class="val"><span class="money">${brl(r.v)}</span></div><span></span></div>`).join("") || empty("repeat", "Nada aqui ainda.")}</div></div>`; }).join("")}</section>
       <p class="hint" style="margin-top:12px">Para criar, toque no botão <b>+</b> e escolha “Todo mês”. Toque num item para editar ou parar de repetir.</p>`;
   } else {
     body = `<section class="box"><h2>Compras parceladas</h2><p class="hint">Cada compra aparece sozinha nos meses certos. Para criar, toque no botão <b>+</b> e escolha “Parcelado”.</p><div class="list">${S.parcelas.map(p => { const i = diffM(p.data.slice(0, 7), NOW) + 1, fim = short(addM(p.data.slice(0, 7), p.n - 1)), st = i < 1 ? "começa " + short(p.data.slice(0, 7)) : i > p.n ? "quitada" : `${i}/${p.n} agora · última em ${fim}`;
-      return `<div class="row" data-edit="parc:${p.id}" role="button" tabindex="0"><div class="ic" style="background:color-mix(in srgb,${cat(p.cat).cor} 16%,transparent)">${cat(p.cat).e}</div><div><div class="t">${esc(p.d)}</div><div class="m"><span class="dot" style="background:${conta(p.conta).cor}"></span>${esc(conta(p.conta).n)} · ${p.n}× de <span class="money">${brl(p.v)}</span> · <span class="tag ${i > p.n ? "" : "parc"}">${st}</span></div></div><div class="val"><span class="money">${brl(p.v * p.n)}</span></div><span></span></div>`; }).join("") || empty("💳", "Nenhuma compra parcelada.")}</div></section>`;
+      return `<div class="row" data-edit="parc:${p.id}" role="button" tabindex="0"><div class="ic" style="background:color-mix(in srgb,${cat(p.cat).cor} 16%,transparent);color:${cat(p.cat).cor}">${ic(cat(p.cat).e)}</div><div><div class="t">${esc(p.d)}</div><div class="m"><span class="dot" style="background:${conta(p.conta).cor}"></span>${esc(conta(p.conta).n)} · ${p.n}× de <span class="money">${brl(p.v)}</span> · <span class="tag ${i > p.n ? "" : "parc"}">${st}</span></div></div><div class="val"><span class="money">${brl(p.v * p.n)}</span></div><span></span></div>`; }).join("") || empty("card", "Nenhuma compra parcelada.")}</div></section>`;
   }
   $("#view").innerHTML = `<div class="anim">${sub === "mes" ? flow(calc(cur)) : ""}</div>` + tabs + body;
-  $("#mnav").hidden = sub !== "mes"; if (sub !== "mes") $("#ttlSub").innerHTML = "";
   bindRows($("#view"));
   document.querySelectorAll("[data-sub]").forEach(b => b.onclick = () => { sub = b.dataset.sub; animate = true; render(); });
   document.querySelectorAll("[data-f]").forEach(b => b.onclick = () => { filtro = b.dataset.f; render(); });
@@ -262,7 +262,7 @@ function pgCartoes() {
      <span class="v money num" data-count="${v}">${brl(v)}</span>
      ${a.limite ? `<div class="lim"><i style="width:${Math.min(100, v / a.limite * 100)}%"></i></div><span class="d">${Math.round(v / a.limite * 100)}% do limite de <span class="money">${brl0(a.limite)}</span></span>` : ""}</div>`; }).join("")}
     <button class="card" data-p="ajustes" style="background:var(--soft);color:var(--muted);border:2px dashed var(--line);box-shadow:none;align-items:center;justify-content:center;font-weight:700">+ Adicionar cartão</button></section>
-   <section class="grid anim"><div class="box c12"><h2>Faturas dos próximos meses</h2><p class="hint">Só o que já está comprometido: parcelas e assinaturas no crédito</p>${cr.length ? '<div class="chart"><canvas id="chFat"></canvas></div>' : empty("💳", "Cadastre um cartão de crédito em Ajustes.")}</div></section>`;
+   <section class="grid anim"><div class="box c12"><h2>Faturas dos próximos meses</h2><p class="hint">Só o que já está comprometido: parcelas e assinaturas no crédito</p>${cr.length ? '<div class="chart"><canvas id="chFat"></canvas></div>' : empty("card", "Cadastre um cartão de crédito em Ajustes.")}</div></section>`;
   document.querySelectorAll("[data-open-card]").forEach(c => c.onclick = e => { if (e.target.closest("[data-card]")) return; busca = conta(c.dataset.openCard).n; filtro = "tudo"; sub = "mes"; page = "lanc"; animate = true; render(); });
   document.querySelectorAll("[data-card]").forEach(b => b.onclick = e => { e.stopPropagation(); (S.pagos[cur] ??= {}); const k = "card:" + b.dataset.card; S.pagos[cur][k] = !S.pagos[cur][k]; commit(S.pagos[cur][k] ? "Fatura marcada como paga" : "Fatura em aberto"); });
   if (cr.length) charts.push(new Chart($("#chFat"), { type: "bar", data: { labels: fut.map(f => short(f[0])), datasets: cr.map((a, i) => ({ label: a.n, data: fut.map(f => f[1][i]), backgroundColor: a.cor, borderRadius: 5 })) }, options: opts({ scales: { x: { stacked: true, grid: { display: false } }, y: { stacked: true, ticks: { callback: v => S.prefs.priv ? "" : brl0(v) } } } }) }));
@@ -275,7 +275,7 @@ function pgPessoas() {
    <div class="tools" style="margin:16px 0"><button class="btn acc" id="newDebt">+ Registrar dívida</button><button class="btn" id="newPerson">+ Nova pessoa</button></div>
    <section class="people anim">${S.pessoas.map(p => { const s = saldo(p), n = S.dividas.filter(d => d.pessoa === p.id && restante(d) > 0).length;
      return `<button class="person" data-person="${p.id}"><div class="head"><div class="avatar" style="background:${p.cor}">${esc(p.n[0] || "?").toUpperCase()}</div><div><b>${esc(p.n)}</b><div class="hint" style="margin:0">${n ? n + " em aberto" : "tudo quitado"}</div></div></div>
-     <div class="bal ${s > 0 ? "pos" : s < 0 ? "neg" : ""}"><span class="money num">${s === 0 ? "R$ 0,00" : brl(Math.abs(s))}</span></div><div class="hint" style="margin:0">${s > 0 ? "te deve" : s < 0 ? "você deve" : "sem pendências"}</div></button>`; }).join("") || empty("🤝", "Cadastre amigos para anotar quem te deve e a quem você deve.")}</section>`;
+     <div class="bal ${s > 0 ? "pos" : s < 0 ? "neg" : ""}"><span class="money num">${s === 0 ? "R$ 0,00" : brl(Math.abs(s))}</span></div><div class="hint" style="margin:0">${s > 0 ? "te deve" : s < 0 ? "você deve" : "sem pendências"}</div></button>`; }).join("") || empty("handshake", "Cadastre amigos para anotar quem te deve e a quem você deve.")}</section>`;
   $("#newPerson").onclick = () => editPerson();
   $("#newDebt").onclick = () => editDebt();
   document.querySelectorAll("[data-person]").forEach(b => b.onclick = () => personSheet(b.dataset.person));
@@ -285,7 +285,7 @@ function personSheet(pid) {
   openSheet(`<div class="panel"><div class="head" style="display:flex;gap:10px;align-items:center"><div class="avatar" style="background:${p.cor}">${esc(p.n[0]).toUpperCase()}</div><h2 style="flex:1">${esc(p.n)}</h2><button class="btn sm" id="pEdit">Editar</button></div>
    <div class="list">${ds.map(d => { const r = restante(d); return `<div class="row" style="cursor:default;grid-template-columns:1fr auto"><div><div class="t">${esc(d.d)}</div><div class="m">${d.dir === "me_deve" ? "te deve" : "você deve"} · ${d.data.split("-").reverse().join("/")}${d.pagtos.length ? ` · ${d.dir === "me_deve" ? "já recebeu" : "já pagou"} <span class="money">${brl(d.v - r)}</span> de <span class="money">${brl(d.v)}</span>` : ""}</div></div>
      <div style="display:grid;justify-items:end;gap:4px"><span class="money num" style="color:${r <= 0 ? "var(--muted)" : d.dir === "me_deve" ? "var(--in)" : "var(--out)"}">${r <= 0 ? "quitado ✓" : brl(r)}</span>
-     <span class="tools">${r > 0 ? `<button class="btn sm" data-pay-debt="${d.id}">Recebi/Paguei</button>` : ""}<button class="btn sm danger" data-del-debt="${d.id}" aria-label="Excluir">×</button></span></div></div>`; }).join("") || empty("✨", "Nada anotado com essa pessoa.")}</div>
+     <span class="tools">${r > 0 ? `<button class="btn sm" data-pay-debt="${d.id}">Recebi/Paguei</button>` : ""}<button class="btn sm danger" data-del-debt="${d.id}" aria-label="Excluir">×</button></span></div></div>`; }).join("") || empty("extra", "Nada anotado com essa pessoa.")}</div>
    <div class="tools" style="justify-content:space-between"><button class="btn" id="pClose">Fechar</button><button class="btn acc" id="pAdd">+ Nova dívida</button></div></div>`, () => {
     $("#pClose").onclick = closeSheet; $("#pAdd").onclick = () => editDebt(pid); $("#pEdit").onclick = () => editPerson(pid);
     document.querySelectorAll("[data-del-debt]").forEach(b => b.onclick = () => { const snap = snapshot(); S.dividas = S.dividas.filter(d => d.id !== b.dataset.delDebt); commit("Dívida excluída", restoreFrom(snap)); personSheet(pid); });
@@ -340,7 +340,7 @@ function pgFuturo() {
    <div class="box c5"><h2>Metas <button class="btn sm" id="newGoal">+ Nova meta</button></h2>${S.metas.map(g => { const p = Math.min(100, g.atual / g.alvo * 100), falta = g.alvo - g.atual;
      return `<div class="goal"><div class="top2"><span>${esc(g.d)}</span><span class="num">${Math.round(p)}%</span></div><div class="bar"><i style="width:${p}%"></i></div>
      <div style="font-size:13px;color:var(--muted)"><span class="money">${brl0(g.atual)} de ${brl0(g.alvo)}</span> · ${falta <= 0 ? "meta batida 🎉" : `faltam <span class="money">${brl0(falta)}</span>`}</div>
-     <div class="tools"><button class="btn sm" data-dep="${g.id}">Guardar dinheiro</button><button class="btn sm" data-gedit="${g.id}">Editar</button></div></div>`; }).join("") || empty("🎯", "Crie uma meta: reserva, viagem, carro…")}</div></section>`;
+     <div class="tools"><button class="btn sm" data-dep="${g.id}">Guardar dinheiro</button><button class="btn sm" data-gedit="${g.id}">Editar</button></div></div>`; }).join("") || empty("target", "Crie uma meta: reserva, viagem, carro…")}</div></section>`;
   document.querySelectorAll("[data-go]").forEach(b => b.onclick = () => { cur = b.dataset.go; page = "mes"; animate = true; render(); });
   document.querySelectorAll("[data-dep]").forEach(b => b.onclick = () => depositGoal(b.dataset.dep));
   document.querySelectorAll("[data-gedit]").forEach(b => b.onclick = () => editGoal(b.dataset.gedit));
@@ -372,10 +372,10 @@ function editGoal(id) {
 function pgAjustes() {
   const tipos = { saida: "Gasto", entrada: "Entrada", invest: "Investimento" }, ctipos = { credito: "Crédito", debito: "Conta / débito", boleto: "Boleto" };
   $("#view").innerHTML = `<section class="grid anim" style="margin-top:0">
-   <div class="box c6"><h2>Categorias <button class="btn sm" id="addCat">+ Categoria</button></h2><p class="hint">Toque na cor ou no emoji para trocar. Tudo salva sozinho.</p>
+   <div class="box c6"><h2>Categorias <button class="btn sm" id="addCat">+ Categoria</button></h2><p class="hint">Toque na cor ou no ícone para trocar. Tudo salva sozinho.</p>
     <div class="set-list">${S.cats.map(c => `<div class="set-item" style="grid-template-columns:auto auto 1fr auto">
       <input class="swatch" type="color" value="${c.cor}" data-cat="${c.id}" data-k="cor" aria-label="Cor de ${esc(c.n)}">
-      <input class="inline emoji" value="${esc(c.e)}" data-cat="${c.id}" data-k="e" aria-label="Emoji" maxlength="4">
+      <input class="inline emoji" value="${esc(c.e)}" data-cat="${c.id}" data-k="e" aria-label="Ícone" maxlength="20">
       <div style="display:grid;gap:2px;min-width:0"><input class="inline" value="${esc(c.n)}" data-cat="${c.id}" data-k="n" aria-label="Nome" style="font-weight:700">
        <div class="set-fields"><label><span class="mini">Tipo</span><select class="inline" data-cat="${c.id}" data-k="tipo" style="width:auto;font-size:13px">${Object.entries(tipos).map(([k, t]) => `<option value="${k}" ${c.tipo === k ? "selected" : ""}>${t}</option>`).join("")}</select></label>
        ${c.tipo === "saida" ? `<label><span class="mini">Limite por mês (R$)</span><input class="inline" type="number" placeholder="sem limite" value="${c.lim || ""}" data-cat="${c.id}" data-k="lim" style="width:120px;font-size:13px"></label>` : ""}</div></div>
@@ -404,7 +404,7 @@ function pgAjustes() {
   v.querySelectorAll("[data-delconta]").forEach(b => b.onclick = () => { const id = b.dataset.delconta, used = [...S.recorrentes, ...S.parcelas, ...S.avulsos].filter(x => x.conta === id).length;
     confirmBox("Excluir cartão/conta?", used ? `${used} lançamento(s) usam este cartão e vão ficar “Sem conta”.` : "Nenhum lançamento usa este cartão.", "Excluir", () => { const snap = snapshot(); S.contas = S.contas.filter(c => c.id !== id); commit("Excluído", restoreFrom(snap)); }); });
   const focusNew = sel => { const ins = document.querySelectorAll(sel), el = ins[ins.length - 1]; if (!el) return; el.closest(".set-item").scrollIntoView({ behavior: "smooth", block: "center" }); el.closest(".set-item").animate([{ background: "var(--accent-2)" }, { background: "var(--soft)" }], 1600); setTimeout(() => el.select(), 350); };
-  $("#addCat").onclick = () => { S.cats.push({ id: uid(), n: "Nova categoria", e: "🏷️", cor: PAL[S.cats.length % PAL.length], tipo: "saida" }); commit("Categoria criada — digite o nome"); focusNew('[data-k="n"][data-cat]'); };
+  $("#addCat").onclick = () => { S.cats.push({ id: uid(), n: "Nova categoria", e: "tag", cor: PAL[S.cats.length % PAL.length], tipo: "saida" }); commit("Categoria criada — digite o nome"); focusNew('[data-k="n"][data-cat]'); };
   $("#addConta").onclick = () => { S.contas.push({ id: uid(), n: "Novo cartão", cor: PAL[S.contas.length % PAL.length], tipo: "credito" }); commit("Cartão criado — digite o nome"); focusNew('[data-k="n"][data-conta]'); };
   segBind($("#themeSeg"), "t", t => { S.prefs.theme = t; commit(); });
   $("#privDef").onchange = e => { S.prefs.priv = e.target.checked; commit(); };
@@ -431,7 +431,7 @@ function itemForm(opts) {
   let tipo = it.tipo || t0, rep = r0, modoParc = "parcela", catTouched = !!it.cat;
   const lastCat = t => { const l = [...S.avulsos, ...S.recorrentes, ...S.parcelas.map(p => ({ ...p, tipo: "saida" }))].filter(x => (x.tipo || "saida") === t && S.cats.some(c => c.id === x.cat)).pop(); return l?.cat; };
   const sel = t => it.cat && S.cats.find(c => c.id === it.cat)?.tipo === t ? it.cat : lastCat(t);
-  const catOpts = t => { const s = sel(t); return S.cats.filter(c => c.tipo === t).map(c => `<option value="${c.id}" ${c.id === s ? "selected" : ""}>${c.e} ${esc(c.n)}</option>`).join("") || `<option value="">(crie uma categoria em Ajustes)</option>`; };
+  const catOpts = t => { const s = sel(t); return S.cats.filter(c => c.tipo === t).map(c => `<option value="${c.id}" ${c.id === s ? "selected" : ""}>${esc(c.n)}</option>`).join("") || `<option value="">(crie uma categoria em Ajustes)</option>`; };
   const guess = d => { const t = d.toLowerCase(); const hit = S.cats.filter(c => c.tipo === tipo).find(c => t.includes(c.n.toLowerCase().slice(0, 5)));
     if (hit) return hit.id; const kw = { alimentacao: /mercad|lanche|pizza|ifood|restaur|padaria|caf[eé]|a[cç]ougue|almo[cç]o|jantar/, transporte: /uber|gasolina|combust|[oô]nibus|estacion|ped[aá]gio|99/, saude: /farm[aá]cia|m[eé]dic|rem[eé]dio|consulta|dentista/, lazer: /cinema|show|bar|festa|viagem|jogo/, assinaturas: /netflix|spotify|prime|disney|youtube|assinatura/, moradia: /aluguel|condom[ií]nio|luz|[aá]gua|g[aá]s|internet/, compras: /roupa|t[eê]nis|celular|loja|shopee|amazon|shein/ };
     for (const [id, re] of Object.entries(kw)) if (re.test(t) && S.cats.some(c => c.id === id && c.tipo === tipo)) return id; return null; };
@@ -490,8 +490,12 @@ function editItem(src, id) {
   const it = S[list].find(x => x.id === id); if (!it) return;
   const fromHere = src === "rec" && diffM(it.inicio, cur) > 0;
   itemForm({ title: src === "rec" ? "Editar recorrente" : src === "parc" ? "Editar parcelamento" : "Editar lançamento", it: { ...it, tipo: it.tipo || "saida" }, rep: src === "rec" ? "mes" : src === "parc" ? "parc" : "uma", editing: true,
-    extra: src === "rec" ? `<div class="note" style="margin:0"><div>Repete todo mês desde ${short(it.inicio)}${it.fim ? " até " + short(it.fim) : ""}.${fromHere ? `<label style="display:flex;gap:8px;margin-top:6px;font-weight:600"><input type="checkbox" id="fromHere" checked> Aplicar mudanças só a partir de ${short(cur)}</label>` : ""}
-      <div class="tools" style="margin-top:8px"><button type="button" class="btn sm" id="endHere">Parar de repetir a partir de ${short(fromHere ? cur : addM(cur, 1))}</button></div></div></div>` :
+    extra: src === "rec" ? `<div class="note" style="margin:0"><div style="width:100%">
+      <div>Repete todo mês desde ${short(it.inicio)}${it.fim ? " até " + short(it.fim) : ""}.</div>
+      ${fromHere ? `<div style="margin-top:10px">Você está vendo ${short(cur)}. Ao salvar, aplicar a mudança:
+      <label style="display:flex;gap:8px;margin-top:8px;font-weight:600"><input type="radio" name="fromHere" id="fromHereYes" checked> Só a partir de ${short(cur)} (meses anteriores continuam como estavam)</label>
+      <label style="display:flex;gap:8px;margin-top:6px;font-weight:600"><input type="radio" name="fromHere" id="fromHereNo"> Em todos os meses, desde ${short(it.inicio)}</label></div>` : ""}
+      <div class="tools" style="margin-top:10px"><button type="button" class="btn sm" id="endHere">Parar de repetir (deixa de aparecer a partir de ${short(fromHere ? cur : addM(cur, 1))})</button></div></div></div>` :
       src === "parc" ? (() => { const i = diffM(it.data.slice(0, 7), cur) + 1, ativa = !it.fim || diffM(cur, it.fim) <= 0;
         return `<div class="note" style="margin:0"><div>${it.n}× de ${brl(it.v)}, comprado em ${short(it.data.slice(0, 7))}${it.fim ? ` · quitado antecipadamente em ${short(it.fim)} (parcela ${i > it.n ? it.n : i}/${it.n})` : i >= 1 && i <= it.n ? ` · parcela ${i}/${it.n} atual` : ""}.
         ${ativa && i <= it.n ? `<div class="tools" style="margin-top:8px"><button type="button" class="btn sm" id="quitarParc">Quitar antecipadamente (parou de pagar em ${short(cur)})</button></div>` : ""}</div></div>`; })() : "",
@@ -503,7 +507,7 @@ function editItem(src, id) {
     onSave: f => {
       const snap = snapshot(), upd = { d: f.d, v: f.v, cat: f.cat, conta: f.conta };
       if (src === "rec") {
-        if ($("#fromHere")?.checked) { S.recorrentes.push({ ...it, ...upd, id: uid(), tipo: f.tipo, dia: +f.dt.slice(8), inicio: cur, fim: it.fim }); it.fim = addM(cur, -1); }
+        if ($("#fromHereYes")?.checked) { S.recorrentes.push({ ...it, ...upd, id: uid(), tipo: f.tipo, dia: +f.dt.slice(8), inicio: cur, fim: it.fim }); it.fim = addM(cur, -1); }
         else Object.assign(it, upd, { tipo: f.tipo, dia: +f.dt.slice(8), inicio: f.dt.slice(0, 7) });
       } else if (src === "parc") Object.assign(it, upd, { n: f.n, data: f.dt });
       else Object.assign(it, upd, { tipo: f.tipo, data: f.dt });
@@ -523,7 +527,7 @@ function opts(o) {
 }
 function catChart(id, obj) {
   const d = Object.entries(obj).sort((a, b) => b[1] - a[1]);
-  charts.push(new Chart($("#" + id), { type: "doughnut", data: { labels: d.map(x => cat(x[0]).e + " " + cat(x[0]).n), datasets: [{ data: d.map(x => x[1]), backgroundColor: d.map(x => cat(x[0]).cor), borderColor: css("--panel"), borderWidth: 3, hoverOffset: 10 }] },
+  charts.push(new Chart($("#" + id), { type: "doughnut", data: { labels: d.map(x => cat(x[0]).n), datasets: [{ data: d.map(x => x[1]), backgroundColor: d.map(x => cat(x[0]).cor), borderColor: css("--panel"), borderWidth: 3, hoverOffset: 10 }] },
     options: opts({ cutout: "64%", animation: { animateRotate: true, duration: 1000 }, plugins: { legend: { position: innerWidth < 500 ? "bottom" : "right", labels: { boxWidth: 9, boxHeight: 9 } }, tooltip: { enabled: !S.prefs.priv, callbacks: { label: x => " " + x.label + ": " + brl(x.raw) } } } }) }));
 }
 function evoChart(id, from, to) {
@@ -664,12 +668,12 @@ Store.onStatus(s => {
 /* ---------- mini tour ---------- */
 function tour() {
   try { localStorage.setItem("cv.tour", "1"); } catch (e) {}
-  const steps = [["👋", "Bem-vindo ao Fluo", "Aqui você vê quanto sobra no mês. As setas no topo trocam de mês — até meses futuros, que mostram a projeção."],
-    ["➕", "Lançar é no botão verde", "Gasto, entrada ou investimento. Escolha “Todo mês” para contas fixas ou “Parcelado” para compras no cartão: o app espalha pelos meses sozinho."],
-    ["👁️", "O olho esconde os valores", "Útil para abrir o app em público. Toque de novo para mostrar."],
-    ["⚙️", "Tudo é configurável", "Em Ajustes você cria categorias, cartões, limites e escolhe o tema."]];
+  const steps = [["wave", "Bem-vindo ao Fluo", "Aqui você vê quanto sobra no mês. As setas no topo trocam de mês — até meses futuros, que mostram a projeção."],
+    ["plus", "Lançar é no botão verde", "Gasto, entrada ou investimento. Escolha “Todo mês” para contas fixas ou “Parcelado” para compras no cartão: o app espalha pelos meses sozinho."],
+    ["eye", "O olho esconde os valores", "Útil para abrir o app em público. Toque de novo para mostrar."],
+    ["settings", "Tudo é configurável", "Em Ajustes você cria categorias, cartões, limites e escolhe o tema."]];
   let i = 0;
-  const show = () => { const [e, t, d] = steps[i]; openSheet(`<div class="panel" style="text-align:center;justify-items:center"><div class="empty" style="padding:6px"><div class="blob">${e}</div></div><h2>${t}</h2><p class="hint">${d}</p>
+  const show = () => { const [e, t, d] = steps[i]; openSheet(`<div class="panel" style="text-align:center;justify-items:center"><div class="empty" style="padding:6px"><div class="blob">${ic(e, 24)}</div></div><h2>${t}</h2><p class="hint">${d}</p>
     <div style="display:flex;gap:6px;justify-content:center">${steps.map((_, j) => `<span class="dot" style="background:${j === i ? "var(--accent)" : "var(--line)"}"></span>`).join("")}</div>
     <div class="tools" style="justify-content:center"><button class="btn" id="tSkip">Pular</button><button class="btn acc" id="tNext">${i < steps.length - 1 ? "Próximo" : "Começar"}</button></div></div>`, () => {
       $("#tSkip").onclick = closeSheet; $("#tNext").onclick = () => { i++; i < steps.length ? show() : closeSheet(); }; }); };
