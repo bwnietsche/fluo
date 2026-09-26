@@ -178,7 +178,7 @@ function flow(c) {
   const base = Math.max(c.ent, c.sai + c.inv, 1), livre = Math.max(0, c.ent - c.sai - c.inv);
   const seg = [["Fixos", c.fixo, "var(--out)"], ["Parcelas", c.parc, "color-mix(in srgb,var(--out) 55%,var(--panel))"], ["Variáveis", c.vari, "var(--warn)"], ["Investido", c.inv, "var(--inv)"]];
   return `<section class="flow">
-   <div class="big"><div class="lbl">Sobra do mês</div><div class="v ${c.saldo < 0 ? "neg" : ""}"><span class="money num" data-count="${c.saldo}">${brl(c.saldo)}</span></div>
+   <div class="big"><div class="lbl">Saldo do mês</div><div class="v ${c.saldo < 0 ? "neg" : ""}"><span class="money num" data-count="${c.saldo}">${brl(c.saldo)}</span></div>
      <div class="hint">${c.aPagar > 0 ? "ainda falta pagar " + money(c.aPagar) : c.it.length ? "tudo pago ✓" : "nada lançado ainda"}</div></div>
    <div><div class="stack" role="img" aria-label="Divisão da renda">${seg.map(([t, v, col]) => `<span style="width:${v / base * 100}%;background:${col}" title="${t}"></span>`).join("")}<span style="width:${livre / base * 100}%;background:var(--accent-2)" title="Livre"></span></div>
     <div class="legend">${seg.map(([t, v, col]) => `<span><i style="background:${col}"></i>${t}<b class="money">${brl0(v)}</b></span>`).join("")}<span><i style="background:var(--accent-2)"></i>Livre<b class="money">${brl0(livre)}</b></span></div>
@@ -335,8 +335,8 @@ function pgFuturo() {
   const ms = []; for (let i = 0; i < 12; i++) { const k = addM(NOW, i); ms.push([k, calc(k)]); }
   let acc = 0; const media = ms.reduce((t, [, c]) => t + c.inv, 0) / 12;
   $("#view").innerHTML = `<section class="box anim"><h2>Próximos 12 meses</h2><p class="hint">Projeção com recorrentes e parcelas já lançados. Toque num mês para abrir.</p>
-   <div class="months anim">${ms.map(([k, c]) => { acc += c.saldo; return `<button class="mo ${c.saldo < 0 ? "neg" : ""}" data-go="${k}"><b>${short(k)}</b><div class="mini">sobra no mês</div><span class="money num">${brl0(c.saldo)}</span><div style="font-size:12px;color:var(--muted)">somando desde hoje: <span class="money">${brl0(acc)}</span></div></button>`; }).join("")}</div></section>
-   <section class="grid anim"><div class="box c7"><h2>Sobra e investimentos acumulados</h2><div class="chart"><canvas id="chProj"></canvas></div></div>
+   <div class="months anim">${ms.map(([k, c]) => { acc += c.saldo; return `<button class="mo ${c.saldo < 0 ? "neg" : ""}" data-go="${k}"><b>${short(k)}</b><div class="mini">saldo no mês</div><span class="money num">${brl0(c.saldo)}</span><div style="font-size:12px;color:var(--muted)">somando desde hoje: <span class="money">${brl0(acc)}</span></div></button>`; }).join("")}</div></section>
+   <section class="grid anim"><div class="box c7"><h2>Saldo e investimentos acumulados</h2><div class="chart"><canvas id="chProj"></canvas></div></div>
    <div class="box c5"><h2>Metas <button class="btn sm" id="newGoal">+ Nova meta</button></h2>${S.metas.map(g => { const p = Math.min(100, g.atual / g.alvo * 100), falta = g.alvo - g.atual;
      return `<div class="goal"><div class="top2"><span>${esc(g.d)}</span><span class="num">${Math.round(p)}%</span></div><div class="bar"><i style="width:${p}%"></i></div>
      <div style="font-size:13px;color:var(--muted)"><span class="money">${brl0(g.atual)} de ${brl0(g.alvo)}</span> · ${falta <= 0 ? "meta batida 🎉" : `faltam <span class="money">${brl0(falta)}</span>`}</div>
@@ -347,7 +347,7 @@ function pgFuturo() {
   $("#newGoal").onclick = () => editGoal();
   let a = 0, p = 0; const A = [], P = []; ms.forEach(([, c]) => { a += c.saldo; p += c.inv; A.push(a); P.push(p); });
   charts.push(new Chart($("#chProj"), { type: "line", data: { labels: ms.map(m => short(m[0])), datasets: [
-    { label: "Sobra acumulada", data: A, borderColor: css("--accent"), backgroundColor: css("--accent-2"), fill: true, tension: .35, pointRadius: 3 },
+    { label: "Saldo acumulado", data: A, borderColor: css("--accent"), backgroundColor: css("--accent-2"), fill: true, tension: .35, pointRadius: 3 },
     { label: "Investido acumulado", data: P, borderColor: css("--inv"), tension: .35, pointRadius: 3 }] }, options: opts({ scales: { y: { ticks: { callback: v => S.prefs.priv ? "" : brl0(v) } }, x: { grid: { display: false } } } }) }));
 }
 function depositGoal(id) {
@@ -537,7 +537,7 @@ function evoChart(id, from, to) {
   charts.push(new Chart($("#" + id), { type: "bar", data: { labels: ks.map(short), datasets: [
     { label: "Entradas", data: cs.map(c => c.ent), backgroundColor: cs.map((_, i) => fade(cin, i)), borderRadius: 5 },
     { label: "Saídas", data: cs.map(c => c.sai + c.inv), backgroundColor: cs.map((_, i) => fade(cout, i)), borderRadius: 5 },
-    { label: "Sobra", type: "line", data: cs.map(c => c.saldo), borderColor: css("--ink"), pointBackgroundColor: css("--ink"), tension: .3, pointRadius: 3 }] },
+    { label: "Saldo", type: "line", data: cs.map(c => c.saldo), borderColor: css("--ink"), pointBackgroundColor: css("--ink"), tension: .3, pointRadius: 3 }] },
     options: opts({ scales: { x: { grid: { display: false } }, y: { ticks: { callback: v => S.prefs.priv ? "" : brl0(v) } } } }) }));
 }
 
