@@ -51,7 +51,7 @@ const pessoa = id => S.pessoas.find(p => p.id === id) || { n: "?", cor: "#8b93ab
 function monthItems(k) {
   const out = [];
   S.recorrentes.forEach(r => { if (diffM(r.inicio, k) >= 0 && (!r.fim || diffM(k, r.fim) >= 0)) out.push({ ...r, src: "rec", dia: r.dia || 1 }); });
-  S.parcelas.forEach(p => { const i = diffM(p.data.slice(0, 7), k); if (i >= 0 && i < p.n && (!p.fim || diffM(k, p.fim) <= 0)) out.push({ ...p, tipo: "saida", src: "parc", idx: i + 1, dia: +p.data.slice(8) }); });
+  S.parcelas.forEach(p => { const i = diffM(p.data.slice(0, 7), k); if (i >= 0 && i < p.n && (!p.fim || diffM(k, p.fim) >= 0)) out.push({ ...p, tipo: "saida", src: "parc", idx: i + 1, dia: +p.data.slice(8) }); });
   S.avulsos.forEach(a => { if (a.data.slice(0, 7) === k) out.push({ ...a, src: "avulso", dia: +a.data.slice(8) }); });
   return out.sort((a, b) => b.dia - a.dia);
 }
