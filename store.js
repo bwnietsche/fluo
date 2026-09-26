@@ -1,4 +1,4 @@
-/* Caixa Verde — armazenamento
+/* Fluo — armazenamento
    Modo nuvem: Supabase Auth + tabela vaults (1 linha por usuário, dados cifrados com AES-256-GCM no navegador).
    Modo demo:  localStorage, sem conta.
    Economia de requisições: 1 leitura ao entrar, escrita agrupada (debounce 2,5 s) + ao sair da tela. */
@@ -27,8 +27,8 @@
   const sb = cloudReady ? window.supabase.createClient(cfg.SUPABASE_URL, cfg.SUPABASE_ANON_KEY, { auth: { persistSession: true } }) : null;
 
   let mode = null, dataKey = null, version = 0, user = null, timer = null, pending = null, onStatus = () => {};
-  const LOCAL = "caixaverde.demo";
-  const KEYCACHE = "caixaverde.k"; // chave dos dados guardada só nesta sessão do navegador
+  const LOCAL = "fluo.demo";
+  const KEYCACHE = "fluo.k"; // chave dos dados guardada só nesta sessão do navegador
 
   async function cacheKey() { try { sessionStorage.setItem(KEYCACHE, b64(await crypto.subtle.exportKey("raw", dataKey))); } catch (e) {} }
   async function restoreKey() { try { const s = sessionStorage.getItem(KEYCACHE); if (s) dataKey = await crypto.subtle.importKey("raw", ub64(s), "AES-GCM", true, ["encrypt", "decrypt"]); } catch (e) {} return !!dataKey; }
@@ -47,12 +47,12 @@
 
     startDemo() {
       mode = "demo"; user = { email: "modo demonstração" };
-      try { localStorage.setItem("caixaverde.mode", "demo"); return JSON.parse(localStorage.getItem(LOCAL)); } catch (e) { return null; }
+      try { localStorage.setItem("fluo.mode", "demo"); return JSON.parse(localStorage.getItem(LOCAL)); } catch (e) { return null; }
     },
 
     /* sessão já aberta (ex.: recarregou a página) */
     async resume() {
-      let demo = false; try { demo = localStorage.getItem("caixaverde.mode") === "demo"; } catch (e) {}
+      let demo = false; try { demo = localStorage.getItem("fluo.mode") === "demo"; } catch (e) {}
       if (demo) { const st = this.startDemo(); if (st) return { state: st }; }
       if (!sb) return null;
       const { data } = await sb.auth.getSession();
@@ -146,7 +146,7 @@
 
     async signOut() {
       await this.flush();
-      try { sessionStorage.removeItem(KEYCACHE); localStorage.removeItem("caixaverde.mode"); } catch (e) {}
+      try { sessionStorage.removeItem(KEYCACHE); localStorage.removeItem("fluo.mode"); } catch (e) {}
       if (sb && mode === "cloud") await sb.auth.signOut();
       mode = null; dataKey = null; user = null;
     },

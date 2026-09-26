@@ -1,6 +1,6 @@
 {
-  "name": "Caixa Verde",
-  "short_name": "Caixa Verde",
+  "name": "Fluo",
+  "short_name": "Fluo",
   "description": "Controle financeiro pessoal",
   "start_url": "./",
   "scope": "./",

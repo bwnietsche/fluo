@@ -1,4 +1,4 @@
-/* Caixa Verde — app
+/* Fluo — app
    Modelo dinâmico (sem "gerar mês"): qualquer mês é calculado a partir de
    recorrentes (início/fim), parcelas (data + nº) e avulsos (data). */
 (() => {
@@ -444,8 +444,8 @@ function pgAjustes() {
   $("#addConta").onclick = () => { S.contas.push({ id: uid(), n: "Novo cartão", cor: PAL[S.contas.length % PAL.length], tipo: "credito" }); commit("Cartão criado — digite o nome"); focusNew('[data-k="n"][data-conta]'); };
   segBind($("#themeSeg"), "t", t => { S.prefs.theme = t; commit(); });
   $("#privDef").onchange = e => { S.prefs.priv = e.target.checked; commit(); };
-  $("#expBtn").onclick = () => { const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([JSON.stringify(S, null, 1)], { type: "application/json" })); a.download = "caixaverde-backup-" + today() + ".json"; a.click(); toast("Backup baixado"); };
-  $("#impFile").onchange = async e => { try { const d = JSON.parse(await e.target.files[0].text()); if (!d.cats || !d.contas) throw 0; const snap = snapshot(); S = d; commit("Backup restaurado", restoreFrom(snap)); } catch (err) { toast("Arquivo inválido: escolha um backup do Caixa Verde (.json)"); } };
+  $("#expBtn").onclick = () => { const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([JSON.stringify(S, null, 1)], { type: "application/json" })); a.download = "fluo-backup-" + today() + ".json"; a.click(); toast("Backup baixado"); };
+  $("#impFile").onchange = async e => { try { const d = JSON.parse(await e.target.files[0].text()); if (!d.cats || !d.contas) throw 0; const snap = snapshot(); S = d; commit("Backup restaurado", restoreFrom(snap)); } catch (err) { toast("Arquivo inválido: escolha um backup do Fluo (.json)"); } };
   $("#outBtn").onclick = async () => { await Store.signOut(); S = null; showAuth(); };
   $("#wipe").onclick = () => confirmBox("Apagar tudo?", "Todos os lançamentos, cartões, pessoas e metas serão apagados. Baixe um backup antes se quiser guardar.", "Apagar tudo", () => { S = baseState(); commit("Dados apagados"); });
   if ($("#resetDemo")) $("#resetDemo").onclick = () => { S = demoState(); animate = true; commit("Exemplo recarregado"); };
@@ -640,7 +640,7 @@ Store.onStatus(s => {
 /* ---------- mini tour ---------- */
 function tour() {
   try { localStorage.setItem("cv.tour", "1"); } catch (e) {}
-  const steps = [["👋", "Bem-vindo ao Caixa Verde", "Aqui você vê quanto sobra no mês. As setas no topo trocam de mês — até meses futuros, que mostram a projeção."],
+  const steps = [["👋", "Bem-vindo ao Fluo", "Aqui você vê quanto sobra no mês. As setas no topo trocam de mês — até meses futuros, que mostram a projeção."],
     ["➕", "Lançar é no botão verde", "Gasto, entrada ou investimento. Escolha “Todo mês” para contas fixas ou “Parcelado” para compras no cartão: o app espalha pelos meses sozinho."],
     ["👁️", "O olho esconde os valores", "Útil para abrir o app em público. Toque de novo para mostrar."],
     ["⚙️", "Tudo é configurável", "Em Ajustes você cria categorias, cartões, limites e escolhe o tema."]];
