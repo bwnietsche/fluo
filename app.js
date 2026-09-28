@@ -153,6 +153,7 @@ function render() {
   applyTheme(); navs();
   const d = diffM(NOW, cur), monthly = ["mes", "lanc", "cartoes"].includes(page);
   $("#mnav").hidden = !monthly;
+  $("#today").hidden = cur === NOW;
   const ml = $("#mlabel"); if (ml.textContent !== label(cur)) { ml.textContent = label(cur); ml.classList.remove("swap"); ml.offsetWidth; ml.classList.add("swap"); }
   $("#ttl").textContent = Object.fromEntries(PAGES)[page];
   $("#ttlSub").innerHTML = !monthly ? "" : d === 0 ? '<span class="chip now">mês atual</span>' : d > 0 ? '<span class="chip future">projeção</span> estimativa com o que já está lançado' : '<span class="chip">mês passado</span>';
@@ -165,6 +166,7 @@ function render() {
 }
 $("#prev").onclick = () => { cur = addM(cur, -1); animate = true; render(); };
 $("#next").onclick = () => { cur = addM(cur, 1); animate = true; render(); };
+$("#today").onclick = () => { cur = NOW; animate = true; render(); };
 $("#eyeBtn").onclick = () => { S.prefs.priv = !S.prefs.priv; Store.save(S); applyTheme(); render(); };
 /* deslizar para trocar de mês no celular */
 (() => { let x0 = null, y0 = 0; const m = $("main");
