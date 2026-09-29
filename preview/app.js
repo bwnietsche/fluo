@@ -218,10 +218,12 @@ function notes(c) {
 }
 function pgMes() {
   const c = calc(cur);
-  const byDay = {}; c.it.forEach(x => (byDay[x.dia] ??= []).push(x));
+  const grupo = x => x.tipo === "entrada" ? "entrada" : x.tipo === "invest" ? "invest" : x.src === "rec" ? "fixo" : x.src === "parc" ? "parc" : "avulso";
+  const grupos = [["entrada", "Entradas"], ["fixo", "Fixos"], ["parc", "Cartão / parcelas"], ["avulso", "Do mês"], ["invest", "Investido"]];
+  const byGrp = {}; c.it.forEach(x => (byGrp[grupo(x)] ??= []).push(x));
   $("#view").innerHTML = `<div class="anim">${flow(c)}</div><section class="grid anim">
    <div class="box c7"><h2>Extrato do mês <small>${c.it.length} ${c.it.length === 1 ? "item" : "itens"}</small></h2>
-     <div class="list">${Object.keys(byDay).sort((a, b) => b - a).map(d => `<div class="day">Dia ${d}</div>` + byDay[d].map(rowHTML).join("")).join("") || empty("receipt", "Nenhum lançamento neste mês.", `<button class="btn acc" data-new>Fazer o primeiro lançamento</button>`)}</div>
+     <div class="list">${grupos.filter(([k]) => byGrp[k]?.length).map(([k, t]) => `<div class="day" style="display:flex;justify-content:space-between">${t}<span class="money">${brl0(byGrp[k].reduce((s, x) => s + x.v, 0))}</span></div>` + byGrp[k].map(rowHTML).join("")).join("") || empty("receipt", "Nenhum lançamento neste mês.", `<button class="btn acc" data-new>Fazer o primeiro lançamento</button>`)}</div>
      <p class="hint" style="margin-top:10px">Toque em um lançamento para editar ou excluir.</p></div>
    <div class="box c5"><h2>Atenção</h2>${notes(c)}</div>
    <div class="box c6"><h2>Gastos por categoria</h2>${c.sai ? '<div class="chart"><canvas id="chCat"></canvas></div>' : empty("chart", "Sem gastos neste mês.")}</div>
