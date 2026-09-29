@@ -325,13 +325,13 @@ function editPerson(pid, thenDebt) {
       if (pid) {
         p.n = n; p.cor = cor;
         const pc = pessoaConta(pid);
-        if (asConta && !pc) S.contas.push({ id: uid(), n, cor, tipo: "credito", pessoa: pid });
+        if (asConta && !pc) { const ex = S.contas.find(c => !c.pessoa && c.n.trim().toLowerCase() === n.toLowerCase()); if (ex) { ex.pessoa = pid; ex.cor = cor; } else S.contas.push({ id: uid(), n, cor, tipo: "credito", pessoa: pid }); }
         else if (!asConta && pc) S.contas = S.contas.filter(c => c.id !== pc.id);
         else if (pc) { pc.n = n; pc.cor = cor; }
         commit("Salvo"); personSheet(pid);
       } else {
         const np = { id: uid(), n, cor }; S.pessoas.push(np);
-        if (asConta) S.contas.push({ id: uid(), n, cor, tipo: "credito", pessoa: np.id });
+        if (asConta) { const ex = S.contas.find(c => !c.pessoa && c.n.trim().toLowerCase() === n.toLowerCase()); if (ex) { ex.pessoa = np.id; ex.cor = cor; } else S.contas.push({ id: uid(), n, cor, tipo: "credito", pessoa: np.id }); }
         commit("Pessoa adicionada"); thenDebt ? editDebt(np.id) : closeSheet();
       } };
   });
