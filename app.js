@@ -356,10 +356,11 @@ function editDebt(pid) {
 }
 function pgFuturo() {
   const ms = []; for (let i = 0; i < 12; i++) { const k = addM(NOW, i); ms.push([k, calc(k)]); }
-  let acc = 0; const media = ms.reduce((t, [, c]) => t + c.inv, 0) / 12;
-  $("#view").innerHTML = `<section class="box anim"><h2>Próximos 12 meses</h2><p class="hint">Projeção com recorrentes e parcelas já lançados. Toque num mês para abrir.</p>
-   <div class="months anim">${ms.map(([k, c]) => { acc += c.saldo; return `<button class="mo ${c.saldo < 0 ? "neg" : ""}" data-go="${k}"><b>${short(k)}</b><div class="mini">saldo no mês</div><span class="money num">${brl0(c.saldo)}</span><div style="font-size:12px;color:var(--muted)">somando desde hoje: <span class="money">${brl0(acc)}</span></div></button>`; }).join("")}</div></section>
-   <section class="grid anim"><div class="box c7"><h2>Saldo e investimentos acumulados</h2><div class="chart"><canvas id="chProj"></canvas></div></div>
+  const fontes = S.contas.filter(a => a.tipo !== "debito");
+  const totalMes = c => fontes.reduce((t, a) => t + (c.porConta[a.id] || 0), 0);
+  $("#view").innerHTML = `<section class="box anim"><h2>Próximos 12 meses</h2><p class="hint">Faturas, boletos e pessoas já lançados. Toque num mês pra ver o detalhe.</p>
+   <div class="months anim">${ms.map(([k, c]) => `<button class="mo" data-go="${k}"><b>${short(k)}</b><div class="mini">a pagar</div><span class="money num">${brl0(totalMes(c))}</span></button>`).join("")}</div></section>
+   <section class="grid anim"><div class="box c12"><h2>Quando vou pagar o quê</h2><p class="hint">Cartões, boletos e pessoas — cada barra é uma fatura futura.</p><div class="chart" style="height:320px"><canvas id="chProj"></canvas></div></div>
    <div class="box c5"><h2>Metas <button class="btn sm" id="newGoal">+ Nova meta</button></h2>${S.metas.map(g => { const p = Math.min(100, g.atual / g.alvo * 100), falta = g.alvo - g.atual;
      return `<div class="goal"><div class="top2"><span>${esc(g.d)}</span><span class="num">${Math.round(p)}%</span></div><div class="bar"><i style="width:${p}%"></i></div>
      <div style="font-size:13px;color:var(--muted)"><span class="money">${brl0(g.atual)} de ${brl0(g.alvo)}</span> · ${falta <= 0 ? "meta batida 🎉" : `faltam <span class="money">${brl0(falta)}</span>`}</div>
@@ -368,10 +369,8 @@ function pgFuturo() {
   document.querySelectorAll("[data-dep]").forEach(b => b.onclick = () => depositGoal(b.dataset.dep));
   document.querySelectorAll("[data-gedit]").forEach(b => b.onclick = () => editGoal(b.dataset.gedit));
   $("#newGoal").onclick = () => editGoal();
-  let a = 0, p = 0; const A = [], P = []; ms.forEach(([, c]) => { a += c.saldo; p += c.inv; A.push(a); P.push(p); });
-  charts.push(new Chart($("#chProj"), { type: "line", data: { labels: ms.map(m => short(m[0])), datasets: [
-    { label: "Saldo acumulado", data: A, borderColor: css("--accent"), backgroundColor: css("--accent-2"), fill: true, tension: .35, pointRadius: 3 },
-    { label: "Investido acumulado", data: P, borderColor: css("--inv"), tension: .35, pointRadius: 3 }] }, options: opts({ scales: { y: { ticks: { callback: v => S.prefs.priv ? "" : brl0(v) } }, x: { grid: { display: false } } } }) }));
+  charts.push(new Chart($("#chProj"), { type: "bar", data: { labels: ms.map(m => short(m[0])), datasets: fontes.map(a => ({ label: a.n, data: ms.map(([, c]) => c.porConta[a.id] || 0), backgroundColor: a.cor, borderRadius: 5 })) },
+    options: opts({ scales: { x: { stacked: true, grid: { display: false } }, y: { stacked: true, ticks: { callback: v => S.prefs.priv ? "" : brl0(v) } } } }) }));
 }
 function depositGoal(id) {
   const g = S.metas.find(x => x.id === id);
