@@ -47,6 +47,8 @@ const cat = id => S.cats.find(c => c.id === id) || { n: "Sem categoria", e: "out
 const conta = id => S.contas.find(c => c.id === id) || { n: "Sem conta", cor: "#8b93ab", tipo: "debito" };
 const ic = (key, size) => (window.Icons && Icons.render(key, size)) || esc(key || "•");
 const pessoa = id => S.pessoas.find(p => p.id === id) || { n: "?", cor: "#8b93ab" };
+const pessoaConta = pid => S.contas.find(c => c.pessoa === pid);
+const autoDebt = p => { const pc = pessoaConta(p.id); if (!pc) return 0; const v = calc(cur).porConta[pc.id] || 0; return S.pagos[cur]?.["card:" + pc.id] ? 0 : v; };
 
 /* ---------- cálculo ---------- */
 function monthItems(k) {
@@ -228,7 +230,7 @@ function pgMes() {
   evoChart("chEv", -5, 3);
 }
 function pgLanc() {
-  const tabs = `<div class="filters" style="margin-bottom:14px">${[["mes", "Deste mês"], ["rec", "Recorrentes"], ["parc", "Parcelamentos"]].map(([k, t]) => `<button class="pillbtn" data-sub="${k}" aria-pressed="${sub === k}">${t}</button>`).join("")}</div>`;
+  const tabs = `<div class="filters" style="margin:18px 0 14px">${[["mes", "Deste mês"], ["rec", "Recorrentes"], ["parc", "Parcelamentos"]].map(([k, t]) => `<button class="pillbtn" data-sub="${k}" aria-pressed="${sub === k}">${t}</button>`).join("")}</div>`;
   let body = "";
   if (sub === "mes") {
     const c = calc(cur);
@@ -255,9 +257,9 @@ function pgLanc() {
   const bs = $("#busca"); if (bs) bs.oninput = () => { busca = bs.value; const p = bs.selectionStart; render(); const n = $("#busca"); n.focus(); n.setSelectionRange(p, p); };
 }
 function pgCartoes() {
-  const c = calc(cur), cr = S.contas.filter(a => a.tipo === "credito");
+  const c = calc(cur), cards = S.contas.filter(a => !a.pessoa), cr = cards.filter(a => a.tipo === "credito");
   const fut = []; for (let i = 0; i < 6; i++) { const k = addM(cur, i), x = calc(k); fut.push([k, cr.map(a => x.porConta[a.id] || 0)]); }
-  $("#view").innerHTML = `<section class="cards anim">${S.contas.map(a => { const v = c.porConta[a.id] || 0, paid = a.tipo === "credito" && S.pagos[cur]?.["card:" + a.id];
+  $("#view").innerHTML = `<section class="cards anim">${cards.map(a => { const v = c.porConta[a.id] || 0, paid = a.tipo === "credito" && S.pagos[cur]?.["card:" + a.id];
     return `<div class="card ${paid ? "paid" : ""}" style="background:${a.cor}" data-open-card="${a.id}" role="button" tabindex="0" title="Ver lançamentos deste cartão">
      ${a.tipo === "credito" && v ? `<button class="pay" data-card="${a.id}">${paid ? "✓ fatura paga" : "marcar fatura paga"}</button>` : ""}
      <span class="n">${esc(a.n)}</span><span class="d">${a.tipo === "credito" ? "fatura" + (a.venc ? " · vence dia " + a.venc : "") : a.tipo === "boleto" ? "boletos do mês" : "saídas na conta"}</span>
@@ -270,12 +272,12 @@ function pgCartoes() {
   if (cr.length) charts.push(new Chart($("#chFat"), { type: "bar", data: { labels: fut.map(f => short(f[0])), datasets: cr.map((a, i) => ({ label: a.n, data: fut.map(f => f[1][i]), backgroundColor: a.cor, borderRadius: 5 })) }, options: opts({ scales: { x: { stacked: true, grid: { display: false } }, y: { stacked: true, ticks: { callback: v => S.prefs.priv ? "" : brl0(v) } } } }) }));
 }
 function pgPessoas() {
-  const saldo = p => S.dividas.filter(d => d.pessoa === p.id).reduce((t, d) => t + (d.dir === "me_deve" ? 1 : -1) * restante(d), 0);
-  const me = S.dividas.filter(d => d.dir === "me_deve").reduce((t, d) => t + Math.max(0, restante(d)), 0), eu = S.dividas.filter(d => d.dir === "devo").reduce((t, d) => t + Math.max(0, restante(d)), 0);
+  const saldo = p => S.dividas.filter(d => d.pessoa === p.id).reduce((t, d) => t + (d.dir === "me_deve" ? 1 : -1) * restante(d), 0) - autoDebt(p);
+  const me = S.dividas.filter(d => d.dir === "me_deve").reduce((t, d) => t + Math.max(0, restante(d)), 0), eu = S.dividas.filter(d => d.dir === "devo").reduce((t, d) => t + Math.max(0, restante(d)), 0) + S.pessoas.reduce((t, p) => t + autoDebt(p), 0);
   $("#view").innerHTML = `<section class="flow anim" style="grid-template-columns:1fr 1fr"><div class="big"><div class="lbl">Te devem</div><div class="v" style="color:var(--in)"><span class="money num" data-count="${me}">${brl(me)}</span></div></div>
     <div class="big"><div class="lbl">Você deve</div><div class="v" style="color:var(--out)"><span class="money num" data-count="${eu}">${brl(eu)}</span></div></div></section>
    <div class="tools" style="margin:16px 0"><button class="btn acc" id="newDebt">+ Registrar dívida</button><button class="btn" id="newPerson">+ Nova pessoa</button></div>
-   <section class="people anim">${S.pessoas.map(p => { const s = saldo(p), n = S.dividas.filter(d => d.pessoa === p.id && restante(d) > 0).length;
+   <section class="people anim">${S.pessoas.map(p => { const s = saldo(p), n = S.dividas.filter(d => d.pessoa === p.id && restante(d) > 0).length + (autoDebt(p) ? 1 : 0);
      return `<button class="person" data-person="${p.id}"><div class="head"><div class="avatar" style="background:${p.cor}">${esc(p.n[0] || "?").toUpperCase()}</div><div><b>${esc(p.n)}</b><div class="hint" style="margin:0">${n ? n + " em aberto" : "tudo quitado"}</div></div></div>
      <div class="bal ${s > 0 ? "pos" : s < 0 ? "neg" : ""}"><span class="money num">${s === 0 ? "R$ 0,00" : brl(Math.abs(s))}</span></div><div class="hint" style="margin:0">${s > 0 ? "te deve" : s < 0 ? "você deve" : "sem pendências"}</div></button>`; }).join("") || empty("handshake", "Cadastre amigos para anotar quem te deve e a quem você deve.")}</section>`;
   $("#newPerson").onclick = () => editPerson();
@@ -284,7 +286,11 @@ function pgPessoas() {
 }
 function personSheet(pid) {
   const p = pessoa(pid), ds = S.dividas.filter(d => d.pessoa === pid).sort((a, b) => (restante(b) > 0) - (restante(a) > 0) || b.data.localeCompare(a.data));
+  const pc = pessoaConta(pid), pv = pc ? calc(cur).porConta[pc.id] || 0 : 0, paid = pc && S.pagos[cur]?.["card:" + pc.id];
   openSheet(`<div class="panel"><div class="head" style="display:flex;gap:10px;align-items:center"><div class="avatar" style="background:${p.cor}">${esc(p.n[0]).toUpperCase()}</div><h2 style="flex:1">${esc(p.n)}</h2><button class="btn sm" id="pEdit">Editar</button></div>
+   ${pc && pv ? `<div class="row" style="cursor:default;grid-template-columns:1fr auto;background:var(--soft);border-radius:12px;margin-bottom:10px"><div><div class="t">Gasto no cartão de ${esc(p.n)} em ${short(cur)}</div><div class="m">${paid ? "já pago" : "ainda deve"}</div></div>
+   <div style="display:grid;justify-items:end;gap:4px"><span class="money num" style="color:${paid ? "var(--muted)" : "var(--out)"}">${paid ? "quitado ✓" : brl(pv)}</span>
+   <button class="btn sm" data-pay-card="${pc.id}">${paid ? "reabrir" : "marcar como pago"}</button></div></div>` : ""}
    <div class="list">${ds.map(d => { const r = restante(d); return `<div class="row" style="cursor:default;grid-template-columns:1fr auto"><div><div class="t">${esc(d.d)}</div><div class="m">${d.dir === "me_deve" ? "te deve" : "você deve"} · ${d.data.split("-").reverse().join("/")}${d.pagtos.length ? ` · ${d.dir === "me_deve" ? "já recebeu" : "já pagou"} <span class="money">${brl(d.v - r)}</span> de <span class="money">${brl(d.v)}</span>` : ""}</div></div>
      <div style="display:grid;justify-items:end;gap:4px"><span class="money num" style="color:${r <= 0 ? "var(--muted)" : d.dir === "me_deve" ? "var(--in)" : "var(--out)"}">${r <= 0 ? "quitado ✓" : brl(r)}</span>
      <span class="tools">${r > 0 ? `<button class="btn sm" data-pay-debt="${d.id}">Recebi/Paguei</button>` : ""}<button class="btn sm danger" data-del-debt="${d.id}" aria-label="Excluir">×</button></span></div></div>`; }).join("") || empty("extra", "Nada anotado com essa pessoa.")}</div>
@@ -292,6 +298,7 @@ function personSheet(pid) {
     $("#pClose").onclick = closeSheet; $("#pAdd").onclick = () => editDebt(pid); $("#pEdit").onclick = () => editPerson(pid);
     document.querySelectorAll("[data-del-debt]").forEach(b => b.onclick = () => { const snap = snapshot(); S.dividas = S.dividas.filter(d => d.id !== b.dataset.delDebt); commit("Dívida excluída", restoreFrom(snap)); personSheet(pid); });
     document.querySelectorAll("[data-pay-debt]").forEach(b => b.onclick = () => payDebt(b.dataset.payDebt));
+    document.querySelectorAll("[data-pay-card]").forEach(b => b.onclick = () => { (S.pagos[cur] ??= {}); const k = "card:" + b.dataset.payCard; S.pagos[cur][k] = !S.pagos[cur][k]; commit(S.pagos[cur][k] ? "Marcado como pago" : "Reaberto"); personSheet(pid); });
   });
 }
 function payDebt(id) {
@@ -306,13 +313,27 @@ function payDebt(id) {
 }
 function editPerson(pid, thenDebt) {
   const p = pid ? pessoa(pid) : { n: "", cor: PAL[S.pessoas.length % PAL.length] };
+  const pc0 = pid && pessoaConta(pid);
   openSheet(`<form id="npf"><h2>${pid ? "Editar pessoa" : "Nova pessoa"}</h2>
    <label class="fld">Nome<input id="pn" value="${esc(p.n)}" required placeholder="Ex: Lucas" autofocus></label>
    <label class="fld">Cor<input id="pc" type="color" value="${p.cor}" class="swatch" style="width:60px;height:40px"></label>
+   <label class="pref"><input type="checkbox" id="pIsConta" ${pc0 ? "checked" : ""}> Uso o cartão/dinheiro dela pra pagar coisas (aparece como forma de pagamento; o que eu gasto vira dívida aqui)</label>
    <div class="tools" style="justify-content:space-between">${pid ? '<button type="button" class="btn danger" id="pdel">Excluir pessoa</button>' : "<span></span>"}<span class="tools"><button type="button" class="btn" id="px">Cancelar</button><button class="btn acc">Salvar</button></span></div></form>`, () => {
     $("#px").onclick = closeSheet;
-    if (pid) $("#pdel").onclick = () => confirmBox("Excluir " + p.n + "?", "As dívidas anotadas com essa pessoa também serão apagadas.", "Excluir", () => { const snap = snapshot(); S.pessoas = S.pessoas.filter(x => x.id !== pid); S.dividas = S.dividas.filter(d => d.pessoa !== pid); commit("Pessoa excluída", restoreFrom(snap)); });
-    $("#npf").onsubmit = e => { e.preventDefault(); if (pid) { p.n = $("#pn").value.trim(); p.cor = $("#pc").value; commit("Salvo"); personSheet(pid); } else { const np = { id: uid(), n: $("#pn").value.trim(), cor: $("#pc").value }; S.pessoas.push(np); commit("Pessoa adicionada"); thenDebt ? editDebt(np.id) : closeSheet(); } };
+    if (pid) $("#pdel").onclick = () => confirmBox("Excluir " + p.n + "?", "As dívidas anotadas com essa pessoa também serão apagadas.", "Excluir", () => { const snap = snapshot(); S.pessoas = S.pessoas.filter(x => x.id !== pid); S.dividas = S.dividas.filter(d => d.pessoa !== pid); S.contas = S.contas.filter(c => c.pessoa !== pid); commit("Pessoa excluída", restoreFrom(snap)); });
+    $("#npf").onsubmit = e => { e.preventDefault(); const n = $("#pn").value.trim(), cor = $("#pc").value, asConta = $("#pIsConta").checked;
+      if (pid) {
+        p.n = n; p.cor = cor;
+        const pc = pessoaConta(pid);
+        if (asConta && !pc) S.contas.push({ id: uid(), n, cor, tipo: "credito", pessoa: pid });
+        else if (!asConta && pc) S.contas = S.contas.filter(c => c.id !== pc.id);
+        else if (pc) { pc.n = n; pc.cor = cor; }
+        commit("Salvo"); personSheet(pid);
+      } else {
+        const np = { id: uid(), n, cor }; S.pessoas.push(np);
+        if (asConta) S.contas.push({ id: uid(), n, cor, tipo: "credito", pessoa: np.id });
+        commit("Pessoa adicionada"); thenDebt ? editDebt(np.id) : closeSheet();
+      } };
   });
 }
 function editDebt(pid) {
@@ -382,8 +403,8 @@ function pgAjustes() {
        <div class="set-fields"><label><span class="mini">Tipo</span><select class="inline" data-cat="${c.id}" data-k="tipo" style="width:auto;font-size:13px">${Object.entries(tipos).map(([k, t]) => `<option value="${k}" ${c.tipo === k ? "selected" : ""}>${t}</option>`).join("")}</select></label>
        ${c.tipo === "saida" ? `<label><span class="mini">Limite por mês (R$)</span><input class="inline" type="number" placeholder="sem limite" value="${c.lim || ""}" data-cat="${c.id}" data-k="lim" style="width:120px;font-size:13px"></label>` : ""}</div></div>
       <button class="btn sm danger" data-delcat="${c.id}" aria-label="Excluir ${esc(c.n)}">×</button></div>`).join("")}</div></div>
-   <div class="box c6"><h2>Cartões e contas <button class="btn sm" id="addConta">+ Cartão/conta</button></h2><p class="hint">Crédito tem vencimento e limite; a fatura é marcada inteira como paga.</p>
-    <div class="set-list">${S.contas.map(c => `<div class="set-item" style="grid-template-columns:auto 1fr auto">
+   <div class="box c6"><h2>Cartões e contas <button class="btn sm" id="addConta">+ Cartão/conta</button></h2><p class="hint">Crédito tem vencimento e limite; a fatura é marcada inteira como paga. Cartões de pessoas (você deve pra elas) se editam em Pessoas.</p>
+    <div class="set-list">${S.contas.filter(c => !c.pessoa).map(c => `<div class="set-item" style="grid-template-columns:auto 1fr auto">
       <input class="swatch" type="color" value="${c.cor}" data-conta="${c.id}" data-k="cor" aria-label="Cor de ${esc(c.n)}">
       <div style="display:grid;gap:2px;min-width:0"><input class="inline" value="${esc(c.n)}" data-conta="${c.id}" data-k="n" aria-label="Nome" style="font-weight:700">
        <div class="set-fields"><label><span class="mini">Tipo</span><select class="inline" data-conta="${c.id}" data-k="tipo" style="width:auto;font-size:13px">${Object.entries(ctipos).map(([k, t]) => `<option value="${k}" ${c.tipo === k ? "selected" : ""}>${t}</option>`).join("")}</select></label>
