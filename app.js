@@ -577,7 +577,7 @@ function showAuth(msg, startMode, preEmail) {
     const cloud = Store.cloudReady, E = `<div class="err" id="aErr">${esc(msg || "")}</div>`;
     const V = {
       bio: `<h2>Olá de novo</h2><p class="hint">Desbloqueie o Fluo de <b>${esc(email0)}</b>.</p>
-        <button type="button" class="btn acc" id="aBioGo" style="padding:16px;display:flex;gap:10px;justify-content:center;align-items:center;font-size:16px">👆 Desbloquear</button>
+        <button type="button" class="btn acc" id="aBioGo" style="padding:16px;display:flex;gap:10px;justify-content:center;align-items:center;font-size:16px">Desbloquear</button>
         <div class="err" id="aErr">${esc(msg || "")}</div>
         <button type="button" class="linkbtn" data-m="in" style="text-align:center">Usar senha</button>`,
       req: `<h2>Pedir acesso</h2><p class="hint">O Fluo é fechado para amigos. Seu pedido vai para o administrador; quando ele aprovar, você recebe um e-mail para criar a senha.</p>
