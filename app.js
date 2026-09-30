@@ -433,24 +433,26 @@ function pgAjustes() {
        <div class="set-fields"><label><span class="mini">Tipo</span><select class="inline" data-cat="${c.id}" data-k="tipo" style="width:auto;font-size:13px">${Object.entries(tipos).map(([k, t]) => `<option value="${k}" ${c.tipo === k ? "selected" : ""}>${t}</option>`).join("")}</select></label>
        ${c.tipo === "saida" ? `<label><span class="mini">Limite por mês (R$)</span><input class="inline" type="number" placeholder="sem limite" value="${c.lim || ""}" data-cat="${c.id}" data-k="lim" style="width:120px;font-size:13px"></label>` : ""}</div></div>
       <button class="btn sm danger" data-delcat="${c.id}" aria-label="Excluir ${esc(c.n)}">×</button></div>`).join("")}</div></div>
-   <div class="box c6"><h2>Cartões e contas <button class="btn sm" id="addConta">+ Cartão/conta</button></h2><p class="hint">Crédito tem vencimento e limite; a fatura é marcada inteira como paga. Cartões de pessoas (você deve pra elas) se editam em Pessoas.</p>
+   <div class="c6" style="display:grid;gap:16px;align-content:start">
+   <div class="box"><h2>Cartões e contas <button class="btn sm" id="addConta">+ Cartão/conta</button></h2><p class="hint">Crédito tem vencimento e limite; a fatura é marcada inteira como paga. Cartões de pessoas (você deve pra elas) se editam em Pessoas.</p>
     <div class="set-list">${S.contas.filter(c => !c.pessoa).map(c => `<div class="set-item" style="grid-template-columns:auto 1fr auto">
       <input class="swatch" type="color" value="${c.cor}" data-conta="${c.id}" data-k="cor" aria-label="Cor de ${esc(c.n)}">
       <div style="display:grid;gap:2px;min-width:0"><input class="inline" value="${esc(c.n)}" data-conta="${c.id}" data-k="n" aria-label="Nome" style="font-weight:700">
        <div class="set-fields"><label><span class="mini">Tipo</span><select class="inline" data-conta="${c.id}" data-k="tipo" style="width:auto;font-size:13px">${Object.entries(ctipos).map(([k, t]) => `<option value="${k}" ${c.tipo === k ? "selected" : ""}>${t}</option>`).join("")}</select></label>
        ${c.tipo === "credito" ? `<label><span class="mini">Vence dia</span><input class="inline" type="number" min="1" max="31" placeholder="—" value="${c.venc || ""}" data-conta="${c.id}" data-k="venc" style="width:70px;font-size:13px"></label><label><span class="mini">Limite (R$)</span><input class="inline" type="number" placeholder="—" value="${c.limite || ""}" data-conta="${c.id}" data-k="limite" style="width:100px;font-size:13px"></label>` : ""}</div></div>
       <button class="btn sm danger" data-delconta="${c.id}" aria-label="Excluir ${esc(c.n)}">×</button></div>`).join("")}</div></div>
-   <div class="box c6"><h2>Aparência e privacidade</h2>
+   <div class="box"><h2>Aparência e privacidade</h2>
     <div class="fld" style="margin-top:10px">Tema<div class="seg" id="themeSeg">${[["auto", "Automático"], ["light", "Claro"], ["dark", "Escuro"]].map(([k, t]) => `<button data-t="${k}" aria-pressed="${S.prefs.theme === k}">${t}</button>`).join("")}</div></div>
     <label class="pref"><input type="checkbox" id="privDef" ${S.prefs.priv ? "checked" : ""}> Esconder valores (o mesmo que o botão do olho 👁 no topo)</label></div>
-   <div class="box c6"><h2>Conta</h2><p class="hint">Conectado como <b>${esc(Store.user?.email)}</b>. Seus dados são criptografados antes de sair do aparelho: nem o administrador consegue ler.</p>
+   <div class="box"><h2>Conta</h2><p class="hint">Conectado como <b>${esc(Store.user?.email)}</b>. Seus dados são criptografados antes de sair do aparelho: nem o administrador consegue ler.</p>
     <div class="fld" style="margin-top:10px">Ao abrir o Fluo neste aparelho
      <label class="pref"><input type="radio" name="openMode" value="direto"> Entrar direto, sem pedir nada</label>
      <label class="pref" id="bioRow" style="display:none"><input type="radio" name="openMode" value="bio"> Pedir biometria (Face ID / digital)</label>
      <label class="pref"><input type="radio" name="openMode" value="senha"> Pedir a senha</label></div>
     <div class="tools" style="margin-top:10px"><button class="btn" id="chPw">Trocar senha</button><button class="btn" id="expBtn">Baixar backup</button><label class="btn" style="cursor:pointer">Restaurar backup<input type="file" id="impFile" accept="application/json" hidden></label><button class="btn" id="outBtn">Sair</button></div>
     <div class="tools" style="margin-top:10px"><button class="btn danger" id="wipe">Apagar todos os dados</button></div></div>
-   <div class="box c12"><h2>Instalar no celular ou PC</h2><p class="hint" style="margin-bottom:0"><b>iPhone:</b> abra no Safari → botão Compartilhar → “Adicionar à Tela de Início”. <b>Android:</b> Chrome → menu ⋮ → “Instalar app”. <b>PC:</b> Chrome/Edge → ícone de instalar na barra de endereço.</p></div></section>`;
+   <div class="box"><h2>Instalar no celular ou PC</h2><p class="hint" style="margin-bottom:0"><b>iPhone:</b> abra no Safari → botão Compartilhar → “Adicionar à Tela de Início”. <b>Android:</b> Chrome → menu ⋮ → “Instalar app”. <b>PC:</b> Chrome/Edge → ícone de instalar na barra de endereço.</p></div></div>
+   </section>`;
   const v = $("#view");
   v.querySelectorAll("[data-cat]").forEach(i => i.onchange = () => { const c = S.cats.find(x => x.id === i.dataset.cat); const k = i.dataset.k; c[k] = k === "lim" ? (+i.value || undefined) : i.value; if (k === "n" && !c.n.trim()) c.n = "Sem nome"; commit(k === "tipo" ? "" : "Salvo"); });
   v.querySelectorAll("[data-conta]").forEach(i => i.onchange = () => { const c = S.contas.find(x => x.id === i.dataset.conta); const k = i.dataset.k; c[k] = ["venc", "limite"].includes(k) ? (+i.value || undefined) : i.value; commit(k === "tipo" ? "" : "Salvo"); });
