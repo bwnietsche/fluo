@@ -42,7 +42,7 @@ function baseState() {
     pessoas: [], recorrentes: [], parcelas: [], avulsos: [], dividas: [], pagos: {}, metas: [],
   };
 }
-let S = null, cur = NOW, page = "mes", sub = "mes", filtro = "tudo", busca = "", animate = true, charts = [];
+let S = null, cur = NOW, page = "mes", sub = "mes", filtro = "tudo", busca = "", agrupar = "dia", animate = true, charts = [];
 const cat = id => S.cats.find(c => c.id === id) || { n: "Sem categoria", e: "outros", cor: "#8b93ab" };
 const conta = id => S.contas.find(c => c.id === id) || { n: "Sem conta", cor: "#8b93ab", tipo: "debito" };
 const ic = (key, size) => (window.Icons && Icons.render(key, size)) || esc(key || "•");
@@ -85,12 +85,13 @@ const I = {
   lanc: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h10"/></svg>',
   cartoes: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="5" width="20" height="14" rx="3"/><path d="M2 10h20"/></svg>',
   pessoas: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.5 3.4-5.5 6.5-5.5s5.7 2 6.5 5.5"/><path d="M16 4.5a3.5 3.5 0 010 7M18 14.5c1.8.7 3 2.6 3.5 5.5"/></svg>',
+  pagar: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="3" width="16" height="18" rx="3"/><path d="M8 12l3 3 5-6"/></svg>',
   futuro: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 20l6-7 4 4 8-10"/><path d="M15 7h6v6"/></svg>',
   ajustes: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 00.3 1.8l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.7 1.7 0 00-1.8-.3 1.7 1.7 0 00-1 1.5V21a2 2 0 11-4 0v-.1a1.7 1.7 0 00-1.1-1.5 1.7 1.7 0 00-1.8.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.7 1.7 0 00.3-1.8 1.7 1.7 0 00-1.5-1H3a2 2 0 110-4h.1a1.7 1.7 0 001.5-1.1 1.7 1.7 0 00-.3-1.8l-.1-.1a2 2 0 112.8-2.8l.1.1a1.7 1.7 0 001.8.3H9a1.7 1.7 0 001-1.5V3a2 2 0 114 0v.1a1.7 1.7 0 001 1.5 1.7 1.7 0 001.8-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.7 1.7 0 00-.3 1.8V9a1.7 1.7 0 001.5 1H21a2 2 0 110 4h-.1a1.7 1.7 0 00-1.5 1z"/></svg>',
   eye: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1.5 12S5.5 4.5 12 4.5 22.5 12 22.5 12 18.5 19.5 12 19.5 1.5 12 1.5 12z"/><g class="lid"><circle cx="12" cy="12" r="3.2"/></g><path class="slash" d="M3 3l18 18"/></svg>',
 };
-const PAGES = [["mes", "Mês"], ["lanc", "Lançamentos"], ["cartoes", "Cartões"], ["pessoas", "Pessoas"], ["futuro", "Futuro"], ["ajustes", "Ajustes"]];
-const SHORT = { lanc: "Extrato" };
+const PAGES = [["mes", "Mês"], ["pagar", "Pagar contas"], ["lanc", "Lançamentos"], ["cartoes", "Cartões"], ["pessoas", "Pessoas"], ["futuro", "Futuro"], ["ajustes", "Ajustes"]];
+const SHORT = { lanc: "Extrato", pagar: "Pagar" };
 
 /* ---------- utilidades de UI ---------- */
 let toastT;
@@ -153,14 +154,14 @@ function render() {
   const keepY = window.scrollY;
   charts.forEach(c => c.destroy()); charts = [];
   applyTheme(); navs();
-  const d = diffM(NOW, cur), monthly = ["mes", "lanc", "cartoes"].includes(page);
+  const d = diffM(NOW, cur), monthly = ["mes", "pagar", "lanc", "cartoes"].includes(page);
   $("#mnav").hidden = !monthly;
   $("#today").hidden = cur === NOW;
   const ml = $("#mlabel"); if (ml.textContent !== label(cur)) { ml.textContent = label(cur); ml.classList.remove("swap"); ml.offsetWidth; ml.classList.add("swap"); }
   $("#ttl").textContent = Object.fromEntries(PAGES)[page];
   $("#ttlSub").innerHTML = !monthly ? "" : d === 0 ? '<span class="chip now">mês atual</span>' : d > 0 ? '<span class="chip future">projeção</span> estimativa com o que já está lançado' : '<span class="chip">mês passado</span>';
   const v = $("#view"); v.className = animate ? "view-enter" : "";
-  ({ mes: pgMes, lanc: pgLanc, cartoes: pgCartoes, pessoas: pgPessoas, futuro: pgFuturo, ajustes: pgAjustes })[page]();
+  ({ mes: pgMes, pagar: pgPagar, lanc: pgLanc, cartoes: pgCartoes, pessoas: pgPessoas, futuro: pgFuturo, ajustes: pgAjustes })[page]();
   if (animate) { v.querySelectorAll(".anim").forEach(g => [...g.children].forEach((c, i) => c.style.setProperty("--i", i))); countUp(); }
   else { v.querySelectorAll(".anim").forEach(g => g.classList.remove("anim")); window.scrollTo(0, keepY); }
   Controls.enhance(v);
@@ -173,7 +174,7 @@ $("#eyeBtn").onclick = () => { S.prefs.priv = !S.prefs.priv; Store.save(S); appl
 /* deslizar para trocar de mês no celular */
 (() => { let x0 = null, y0 = 0; const m = $("main");
   m.addEventListener("touchstart", e => { if (e.target.closest(".chart,.months,input,.cards")) return; x0 = e.touches[0].clientX; y0 = e.touches[0].clientY; }, { passive: true });
-  m.addEventListener("touchend", e => { if (x0 === null || !["mes", "lanc", "cartoes"].includes(page)) return; const dx = e.changedTouches[0].clientX - x0, dy = e.changedTouches[0].clientY - y0; x0 = null;
+  m.addEventListener("touchend", e => { if (x0 === null || !["mes", "pagar", "lanc", "cartoes"].includes(page)) return; const dx = e.changedTouches[0].clientX - x0, dy = e.changedTouches[0].clientY - y0; x0 = null;
     if (Math.abs(dx) > 70 && Math.abs(dx) > Math.abs(dy) * 1.5) { cur = addM(cur, dx < 0 ? 1 : -1); animate = true; render(); } }, { passive: true });
 })();
 
@@ -218,16 +219,40 @@ function notes(c) {
 }
 function pgMes() {
   const c = calc(cur);
+  const grupo = x => x.tipo === "entrada" ? "entrada" : x.tipo === "invest" ? "invest" : x.src === "rec" ? "fixo" : x.src === "parc" ? "parc" : "avulso";
+  const grupos = [["entrada", "Entradas"], ["fixo", "Fixos"], ["parc", "Cartão / parcelas"], ["avulso", "Do mês"], ["invest", "Investido"]];
+  const byGrp = {}; c.it.forEach(x => (byGrp[grupo(x)] ??= []).push(x));
   $("#view").innerHTML = `<div class="anim">${flow(c)}</div><section class="grid anim">
-   <div class="box c7"><h2>Movimentação <small>${c.it.length} ${c.it.length === 1 ? "item" : "itens"}</small></h2>
-     <div class="list">${c.it.slice(0, 8).map(rowHTML).join("") || empty("receipt", "Nenhum lançamento neste mês.", `<button class="btn acc" data-new>Fazer o primeiro lançamento</button>`)}</div>
-     ${c.it.length > 8 ? `<button class="btn" data-p="lanc" style="margin-top:10px">Ver todos os ${c.it.length}</button>` : ""}</div>
+   <div class="box c7"><h2>Extrato do mês <small>${c.it.length} ${c.it.length === 1 ? "item" : "itens"}</small></h2>
+     <div class="list">${grupos.filter(([k]) => byGrp[k]?.length).map(([k, t]) => `<div class="day" style="display:flex;justify-content:space-between">${t}<span class="money">${brl0(byGrp[k].reduce((s, x) => s + x.v, 0))}</span></div>` + byGrp[k].map(rowHTML).join("")).join("") || empty("receipt", "Nenhum lançamento neste mês.", `<button class="btn acc" data-new>Fazer o primeiro lançamento</button>`)}</div>
+     <p class="hint" style="margin-top:10px">Toque em um lançamento para editar ou excluir.</p></div>
    <div class="box c5"><h2>Atenção</h2>${notes(c)}</div>
    <div class="box c6"><h2>Gastos por categoria</h2>${c.sai ? '<div class="chart"><canvas id="chCat"></canvas></div>' : empty("chart", "Sem gastos neste mês.")}</div>
    <div class="box c6"><h2>Meses anteriores e próximos</h2><div class="chart"><canvas id="chEv"></canvas></div></div></section>`;
   bindRows($("#view"));
   if (c.sai) catChart("chCat", c.porCat);
   evoChart("chEv", -5, 3);
+}
+/* contas a pagar do mês: faturas (cartões e pessoas) + fixos fora do crédito */
+function contasDoMes(k) {
+  const c = calc(k), out = [];
+  S.contas.filter(a => a.tipo === "credito" || a.pessoa).forEach(a => { const v = c.porConta[a.id]; if (v) out.push({ key: "card:" + a.id, n: a.pessoa ? pessoa(a.pessoa).n : "Fatura " + a.n, sub: a.pessoa ? "cartão/dinheiro dela" : "cartão de crédito", dia: a.venc || 1, v, cor: a.cor }); });
+  c.it.filter(x => x.tipo === "saida" && x.src === "rec" && conta(x.conta).tipo !== "credito" && !conta(x.conta).pessoa).forEach(x => out.push({ key: x.id, n: x.d, sub: conta(x.conta).n, dia: x.dia, v: x.v, cor: cat(x.cat).cor, icon: cat(x.cat).e }));
+  out.forEach(o => o.paid = !!S.pagos[k]?.[o.key]);
+  return out.sort((a, b) => a.paid - b.paid || a.dia - b.dia);
+}
+function pgPagar() {
+  const l = contasDoMes(cur), tot = l.reduce((t, x) => t + x.v, 0), pago = l.filter(x => x.paid).reduce((t, x) => t + x.v, 0), hoje = +new Date().getDate();
+  $("#view").innerHTML = `<section class="flow anim"><div class="big"><div class="lbl">Falta pagar</div><div class="v"><span class="money num" data-count="${tot - pago}">${brl(tot - pago)}</span></div>
+     <div class="hint">${l.length ? `${l.filter(x => x.paid).length} de ${l.length} contas pagas · <span class="money">${brl(pago)}</span> de <span class="money">${brl(tot)}</span>` : "nenhuma conta neste mês"}</div></div>
+     <div><div class="stack" role="img" aria-label="Progresso"><span style="width:${tot ? pago / tot * 100 : 0}%;background:var(--accent-2)"></span></div></div></section>
+   <section class="box anim" style="margin-top:18px"><h2>Contas do mês <small>toque no ✓ quando pagar</small></h2><div class="list">${l.map(x => { const late = !x.paid && cur === NOW && x.dia < hoje || !x.paid && diffM(cur, NOW) > 0;
+     return `<div class="row ${x.paid ? "done" : ""}"><div class="ic" style="background:color-mix(in srgb,${x.cor} 16%,transparent);color:${x.cor}">${ic(x.icon || "card")}</div>
+      <div><div class="t">${esc(x.n)}</div><div class="m">${esc(x.sub)} · vence dia ${x.dia} ${late ? '<span class="tag last">atrasada</span>' : ""}</div></div>
+      <div class="val out"><span class="money">${brl(x.v)}</span></div>
+      <button class="check" data-paykey="${esc(x.key)}" aria-pressed="${x.paid}" aria-label="${x.paid ? "Pago" : "Marcar como pago"}">✓</button></div>`; }).join("") || empty("receipt", "Nenhuma conta a pagar neste mês.")}</div>
+     <p class="hint" style="margin-top:10px">Faturas de cartão, o que você deve a pessoas pelo cartão delas e as contas fixas (boleto, débito). Compras no débito já contam como pagas.</p></section>`;
+  document.querySelectorAll("[data-paykey]").forEach(b => b.onclick = () => { (S.pagos[cur] ??= {}); const k = b.dataset.paykey; S.pagos[cur][k] = !S.pagos[cur][k]; commit(S.pagos[cur][k] ? "Pago ✓" : "Reaberto"); });
 }
 function pgLanc() {
   const tabs = `<div class="filters" style="margin:18px 0 14px">${[["mes", "Deste mês"], ["rec", "Recorrentes"], ["parc", "Parcelamentos"]].map(([k, t]) => `<button class="pillbtn" data-sub="${k}" aria-pressed="${sub === k}">${t}</button>`).join("")}</div>`;
@@ -236,10 +261,15 @@ function pgLanc() {
     const c = calc(cur);
     let it = c.it.filter(x => filtro === "tudo" || (filtro === "entrada" && x.tipo !== "saida") || (filtro === "saida" && x.tipo === "saida") || (filtro === "aberto" && x.tipo === "saida" && !isPaid(cur, x)));
     if (busca) it = it.filter(x => (x.d + " " + cat(x.cat).n + " " + conta(x.conta).n).toLowerCase().includes(busca.toLowerCase()));
-    const byDay = {}; it.forEach(x => (byDay[x.dia] ??= []).push(x));
+    const groupKey = agrupar === "conta" ? x => x.conta : agrupar === "cat" ? x => x.cat : x => x.dia;
+    const groupLabel = agrupar === "conta" ? k => esc(conta(k).n) : agrupar === "cat" ? k => esc(cat(k).n) : k => "Dia " + k;
+    const groupSort = agrupar === "dia" ? (a, b) => b - a : (a, b) => byGrp[b].reduce((t, x) => t + x.v, 0) - byGrp[a].reduce((t, x) => t + x.v, 0);
+    const byGrp = {}; it.forEach(x => (byGrp[groupKey(x)] ??= []).push(x));
     body = `<section class="box"><div class="filters">${[["tudo", "Tudo"], ["saida", "Saídas"], ["entrada", "Entradas"], ["aberto", "A pagar"]].map(([k, t]) => `<button class="pillbtn" data-f="${k}" aria-pressed="${filtro === k}">${t}</button>`).join("")}
      <input class="search" id="busca" type="search" placeholder="Buscar por nome, categoria ou cartão" value="${esc(busca)}" aria-label="Buscar"></div>
-     <div class="list">${Object.keys(byDay).sort((a, b) => b - a).map(d => `<div class="day">Dia ${d}</div>` + byDay[d].map(rowHTML).join("")).join("") || empty("search", busca || filtro !== "tudo" ? "Nada encontrado com esse filtro." : "Nenhum lançamento neste mês.")}</div>
+     <label class="fld" style="max-width:220px;margin-bottom:4px">Agrupar por<select id="agrupSel">${[["dia", "Dia"], ["conta", "Forma de pagamento"], ["cat", "Categoria"]].map(([k, t]) => `<option value="${k}" ${agrupar === k ? "selected" : ""}>${t}</option>`).join("")}</select></label>
+     <div class="list">${Object.keys(byGrp).sort(groupSort).map(g => { const tot = byGrp[g].reduce((t, x) => t + x.v, 0);
+       return `<div class="day" style="display:flex;justify-content:space-between">${groupLabel(g)}${agrupar !== "dia" ? `<span class="money">${brl0(tot)}</span>` : ""}</div>` + byGrp[g].map(rowHTML).join(""); }).join("") || empty("search", busca || filtro !== "tudo" ? "Nada encontrado com esse filtro." : "Nenhum lançamento neste mês.")}</div>
      <p class="hint" style="margin-top:10px">Toque em um lançamento para editar ou excluir.</p></section>`;
   } else if (sub === "rec") {
     const grp = [["entrada", "Entradas fixas"], ["saida", "Contas e assinaturas"], ["invest", "Aportes"]];
@@ -255,6 +285,7 @@ function pgLanc() {
   document.querySelectorAll("[data-sub]").forEach(b => b.onclick = () => { sub = b.dataset.sub; animate = true; render(); });
   document.querySelectorAll("[data-f]").forEach(b => b.onclick = () => { filtro = b.dataset.f; render(); });
   const bs = $("#busca"); if (bs) bs.oninput = () => { busca = bs.value; const p = bs.selectionStart; render(); const n = $("#busca"); n.focus(); n.setSelectionRange(p, p); };
+  if ($("#agrupSel")) $("#agrupSel").onchange = e => { agrupar = e.target.value; render(); };
 }
 function pgCartoes() {
   const c = calc(cur), cards = S.contas.filter(a => !a.pessoa), cr = cards.filter(a => a.tipo === "credito");
