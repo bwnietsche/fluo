@@ -326,8 +326,9 @@ input[type=number]{-moz-appearance:textfield}
   .mnav span{min-width:96px;font-size:13px}
   .eye{width:44px;height:44px;margin-left:auto}
   .toast{bottom:calc(150px + env(safe-area-inset-bottom,0px))}
-  .bottomnav{display:grid;grid-template-columns:repeat(6,1fr);position:fixed;left:0;right:0;bottom:0;background:var(--panel);border-top:1px solid var(--line);padding:6px 4px calc(6px + env(safe-area-inset-bottom,0px));z-index:19}
-  .bottomnav .navbtn{display:grid;justify-items:center;gap:2px;font-size:10.5px;font-weight:700;color:var(--muted);padding:5px 2px;text-align:center}
+  .bottomnav{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));position:fixed;left:0;right:0;bottom:0;background:var(--panel);border-top:1px solid var(--line);padding:6px 4px calc(6px + env(safe-area-inset-bottom,0px));z-index:19}
+  .bottomnav .navbtn{display:grid;justify-items:center;gap:2px;font-size:10px;font-weight:700;color:var(--muted);padding:5px 0;text-align:center;min-width:0}
+  .bottomnav .navbtn span{max-width:100%;overflow:hidden;text-overflow:clip;white-space:nowrap}
   .bottomnav .navbtn:hover{transform:none;background:none}
   .bottomnav .navbtn[aria-current="true"]{color:var(--accent);background:none}
   .bottomnav .navbtn[aria-current="true"]::before{left:30%;right:30%;top:-6px;bottom:auto;width:auto;height:3px;border-radius:0 0 3px 3px}

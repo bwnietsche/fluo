@@ -1,4 +1,4 @@
-/* Fluo — app
+﻿/* Fluo — app
    Modelo dinâmico (sem "gerar mês"): qualquer mês é calculado a partir de
    recorrentes (início/fim), parcelas (data + nº) e avulsos (data). */
 (() => {
@@ -49,6 +49,10 @@ const ic = (key, size) => (window.Icons && Icons.render(key, size)) || esc(key |
 const pessoa = id => S.pessoas.find(p => p.id === id) || { n: "?", cor: "#8b93ab" };
 const pessoaConta = pid => S.contas.find(c => c.pessoa === pid);
 const autoDebt = p => { const pc = pessoaConta(p.id); if (!pc) return 0; const v = calc(cur).porConta[pc.id] || 0; return S.pagos[cur]?.["card:" + pc.id] ? 0 : v; };
+
+const EV = () => (S.eventos ??= []);
+const evento = id => EV().find(e => e.id === id);
+let evSel = null;
 
 /* ---------- cálculo ---------- */
 function monthItems(k) {
@@ -154,7 +158,7 @@ function render() {
   const keepY = window.scrollY;
   charts.forEach(c => c.destroy()); charts = [];
   applyTheme(); navs();
-  const d = diffM(NOW, cur), monthly = ["mes", "pagar", "lanc", "cartoes"].includes(page);
+  const d = diffM(NOW, cur), monthly = ["mes", "pagar", "lanc", "cartoes", "pessoas"].includes(page);
   $("#mnav").hidden = !monthly;
   $("#today").hidden = cur === NOW;
   const ml = $("#mlabel"); if (ml.textContent !== label(cur)) { ml.textContent = label(cur); ml.classList.remove("swap"); ml.offsetWidth; ml.classList.add("swap"); }
@@ -174,7 +178,7 @@ $("#eyeBtn").onclick = () => { S.prefs.priv = !S.prefs.priv; Store.save(S); appl
 /* deslizar para trocar de mês no celular */
 (() => { let x0 = null, y0 = 0; const m = $("main");
   m.addEventListener("touchstart", e => { if (e.target.closest(".chart,.months,input,.cards")) return; x0 = e.touches[0].clientX; y0 = e.touches[0].clientY; }, { passive: true });
-  m.addEventListener("touchend", e => { if (x0 === null || !["mes", "pagar", "lanc", "cartoes"].includes(page)) return; const dx = e.changedTouches[0].clientX - x0, dy = e.changedTouches[0].clientY - y0; x0 = null;
+  m.addEventListener("touchend", e => { if (x0 === null || !["mes", "pagar", "lanc", "cartoes", "pessoas"].includes(page)) return; const dx = e.changedTouches[0].clientX - x0, dy = e.changedTouches[0].clientY - y0; x0 = null;
     if (Math.abs(dx) > 70 && Math.abs(dx) > Math.abs(dy) * 1.5) { cur = addM(cur, dx < 0 ? 1 : -1); animate = true; render(); } }, { passive: true });
 })();
 
@@ -194,8 +198,9 @@ function flow(c) {
 function rowHTML(x) {
   const c = conta(x.conta), k = cat(x.cat), paid = isPaid(cur, x);
   const canCheck = x.tipo === "saida" && x.src === "rec" && c.tipo !== "credito";
-  const tag = x.src === "rec" ? `<span class="tag rec">todo mês</span>` : x.src === "parc" ? `<span class="tag ${x.idx === x.n ? "last" : "parc"}">${x.idx}/${x.n}${x.idx === x.n ? " · última" : ""}</span>` : "";
+  let tag = x.src === "rec" ? `<span class="tag rec">todo mês</span>` : x.src === "parc" ? `<span class="tag ${x.idx === x.n ? "last" : "parc"}">${x.idx}/${x.n}${x.idx === x.n ? " · última" : ""}</span>` : "";
   const sign = x.tipo === "entrada" ? "+ " : x.tipo === "invest" ? "→ " : "− ";
+  const evt = x.ev && evento(x.ev); if (evt) tag += ` <span class="tag parc">${esc(evt.n)}</span>`;
   return `<div class="row ${canCheck && paid ? "done" : ""}" data-edit="${x.src}:${x.id}" role="button" tabindex="0" aria-label="Editar ${esc(x.d)}">
    <div class="ic" style="background:color-mix(in srgb,${k.cor} 16%,transparent);color:${k.cor}">${ic(k.e)}</div>
    <div><div class="t">${esc(x.d)}</div><div class="m"><span class="dot" style="background:${c.cor}"></span>${esc(c.n)} · dia ${x.dia} ${tag}</div></div>
@@ -255,7 +260,7 @@ function pgPagar() {
   document.querySelectorAll("[data-paykey]").forEach(b => b.onclick = () => { (S.pagos[cur] ??= {}); const k = b.dataset.paykey; S.pagos[cur][k] = !S.pagos[cur][k]; commit(S.pagos[cur][k] ? "Pago ✓" : "Reaberto"); });
 }
 function pgLanc() {
-  const tabs = `<div class="filters" style="margin:18px 0 14px">${[["mes", "Deste mês"], ["rec", "Recorrentes"], ["parc", "Parcelamentos"]].map(([k, t]) => `<button class="pillbtn" data-sub="${k}" aria-pressed="${sub === k}">${t}</button>`).join("")}</div>`;
+  const tabs = `<div class="filters" style="margin:18px 0 14px">${[["mes", "Deste mês"], ["rec", "Recorrentes"], ["parc", "Parcelamentos"], ["ev", "Eventos"]].map(([k, t]) => `<button class="pillbtn" data-sub="${k}" aria-pressed="${sub === k}">${t}</button>`).join("")}</div>`;
   let body = "";
   if (sub === "mes") {
     const c = calc(cur);
@@ -276,16 +281,85 @@ function pgLanc() {
     body = `<section class="grid auto anim" style="margin-top:0">${grp.map(([t, h]) => { const l = S.recorrentes.filter(r => r.tipo === t); const ativos = l.filter(r => !r.fim || diffM(NOW, r.fim) >= 0);
       return `<div class="box c4"><h2>${h}<small class="money">${brl(ativos.reduce((s, r) => s + r.v, 0))}/mês</small></h2><div class="list">${l.map(r => `<div class="row" data-edit="rec:${r.id}" role="button" tabindex="0"><div class="ic" style="background:color-mix(in srgb,${cat(r.cat).cor} 16%,transparent);color:${cat(r.cat).cor}">${ic(cat(r.cat).e)}</div><div><div class="t">${esc(r.d)}</div><div class="m"><span class="dot" style="background:${conta(r.conta).cor}"></span>${esc(conta(r.conta).n)} · dia ${r.dia} · ${r.fim ? "até " + short(r.fim) : "desde " + short(r.inicio)}</div></div><div class="val"><span class="money">${brl(r.v)}</span></div><span></span></div>`).join("") || empty("repeat", "Nada aqui ainda.")}</div></div>`; }).join("")}</section>
       <p class="hint" style="margin-top:12px">Para criar, toque no botão <b>+</b> e escolha “Todo mês”. Toque num item para editar ou parar de repetir.</p>`;
+  } else if (sub === "ev") {
+    body = evSel && evento(evSel) ? evView(evSel) : evList();
   } else {
     body = `<section class="box"><h2>Compras parceladas</h2><p class="hint">Cada compra aparece sozinha nos meses certos. Para criar, toque no botão <b>+</b> e escolha “Parcelado”.</p><div class="list">${S.parcelas.map(p => { const i = diffM(p.data.slice(0, 7), NOW) + 1, fim = short(addM(p.data.slice(0, 7), p.n - 1)), st = i < 1 ? "começa " + short(p.data.slice(0, 7)) : i > p.n ? "quitada" : `${i}/${p.n} agora · última em ${fim}`;
       return `<div class="row" data-edit="parc:${p.id}" role="button" tabindex="0"><div class="ic" style="background:color-mix(in srgb,${cat(p.cat).cor} 16%,transparent);color:${cat(p.cat).cor}">${ic(cat(p.cat).e)}</div><div><div class="t">${esc(p.d)}</div><div class="m"><span class="dot" style="background:${conta(p.conta).cor}"></span>${esc(conta(p.conta).n)} · ${p.n}× de <span class="money">${brl(p.v)}</span> · <span class="tag ${i > p.n ? "" : "parc"}">${st}</span></div></div><div class="val"><span class="money">${brl(p.v * p.n)}</span></div><span></span></div>`; }).join("") || empty("card", "Nenhuma compra parcelada.")}</div></section>`;
   }
   $("#view").innerHTML = `<div class="anim">${sub === "mes" ? flow(calc(cur)) : ""}</div>` + tabs + body;
   bindRows($("#view"));
-  document.querySelectorAll("[data-sub]").forEach(b => b.onclick = () => { sub = b.dataset.sub; animate = true; render(); });
+  if (sub === "ev") bindEv();
+  document.querySelectorAll("[data-sub]").forEach(b => b.onclick = () => { sub = b.dataset.sub; if (sub === "ev") evSel = null; animate = true; render(); });
   document.querySelectorAll("[data-f]").forEach(b => b.onclick = () => { filtro = b.dataset.f; render(); });
   const bs = $("#busca"); if (bs) bs.oninput = () => { busca = bs.value; const p = bs.selectionStart; render(); const n = $("#busca"); n.focus(); n.setSelectionRange(p, p); };
   if ($("#agrupSel")) $("#agrupSel").onchange = e => { agrupar = e.target.value; render(); };
+}
+/* ---------- eventos: etiqueta que reúne entradas e saídas de vários meses ---------- */
+function evStats(id) {
+  const items = [];
+  S.recorrentes.filter(r => r.ev === id).forEach(r => { let end = r.fim || NOW; if (diffM(end, r.inicio) > 0) end = r.inicio; for (let k = r.inicio; diffM(k, end) >= 0; k = addM(k, 1)) items.push({ ...r, k, src: "rec" }); });
+  S.parcelas.filter(p => p.ev === id).forEach(p => { for (let i = 0; i < p.n; i++) { const k = addM(p.data.slice(0, 7), i); if (!p.fim || diffM(k, p.fim) >= 0) items.push({ ...p, tipo: "saida", k, src: "parc", idx: i + 1 }); } });
+  S.avulsos.filter(a => a.ev === id).forEach(a => items.push({ ...a, k: a.data.slice(0, 7), src: "avulso" }));
+  const sum = f => items.filter(f).reduce((t, x) => t + x.v, 0), porCat = {}, porConta = {}, porMes = {};
+  items.forEach(x => { const m = (porMes[x.k] ??= { sai: 0, ent: 0 }); if (x.tipo === "saida") { m.sai += x.v; porCat[x.cat] = (porCat[x.cat] || 0) + x.v; porConta[x.conta] = (porConta[x.conta] || 0) + x.v; } else if (x.tipo === "entrada") m.ent += x.v; });
+  const fontes = {}; items.forEach(x => { const f = (fontes[x.id] ??= { ...x, total: 0, qtd: 0 }); f.total += x.tipo === "entrada" ? x.v : -x.v; f.qtd++; });
+  return { items, fontes: Object.values(fontes).sort((a, b) => a.total - b.total), porCat, porConta, porMes,
+    sai: sum(x => x.tipo === "saida"), ent: sum(x => x.tipo === "entrada"), pago: sum(x => x.tipo === "saida" && diffM(NOW, x.k) <= 0), avir: sum(x => x.tipo === "saida" && diffM(NOW, x.k) > 0) };
+}
+function evList() {
+  const l = EV();
+  return `<section class="box anim"><h2>Eventos <small>mudança, viagem, reforma…</small></h2>
+   <p class="hint">Um evento junta tudo que você gastou (e recebeu) por causa dele, em vários meses. Ao fazer um lançamento, escolha o evento no campo “Evento”.</p>
+   <div class="list">${l.map(e => { const s = evStats(e.id), pct = e.orc ? Math.min(100, s.sai / e.orc * 100) : 0;
+     return `<div class="row" data-evopen="${e.id}" role="button" tabindex="0"><div class="ic" style="background:color-mix(in srgb,${e.cor} 16%,transparent);color:${e.cor}">${ic("tag")}</div>
+      <div><div class="t">${esc(e.n)}</div><div class="m">${e.orc ? `<span class="money">${brl0(s.sai)}</span> de <span class="money">${brl0(e.orc)}</span> (${Math.round(s.sai / e.orc * 100)}%)` : `${s.items.length} ${s.items.length === 1 ? "lançamento" : "lançamentos"}`}</div>${e.orc ? `<div class="stack" style="margin-top:6px;height:6px"><span style="width:${pct}%;background:${s.sai > e.orc ? "var(--out)" : e.cor}"></span></div>` : ""}</div>
+      <div class="val out"><span class="money">${brl(s.sai)}</span></div><span></span></div>`; }).join("") || empty("tag", "Nenhum evento ainda.")}</div>
+   <div class="tools" style="margin-top:12px"><button class="btn acc" id="evNew">+ Novo evento</button></div></section>`;
+}
+function evView(id) {
+  const e = evento(id), s = evStats(id), pct = e.orc ? s.sai / e.orc * 100 : 0, meses = Object.keys(s.porMes).sort();
+  const kpi = (l, v, c) => `<div class="kpi"><div class="l">${l}</div><div class="v money num" style="${c ? "color:" + c : ""}">${brl(v)}</div></div>`;
+  return `<section class="box anim"><div class="tools" style="justify-content:space-between"><button class="btn sm" id="evBack">← Eventos</button><span class="tools"><button class="btn sm" id="evEdit">Editar</button><button class="btn acc sm" id="evAdd">+ Lançar neste evento</button></span></div>
+   <h2 style="margin-top:16px">${esc(e.n)}</h2>
+   <div class="kpis">${kpi("Gasto total", s.sai, "var(--out)")}${kpi("Entradas", s.ent, "var(--in)")}${kpi("Custo líquido", s.sai - s.ent)}</div>
+   <div class="kpis" style="margin-top:10px">${kpi("Já pago", s.pago)}${kpi("Ainda vai pagar", s.avir)}${e.orc ? kpi(pct > 100 ? "Estourou o orçamento em" : "Resta do orçamento", Math.abs(e.orc - s.sai), pct > 100 ? "var(--out)" : "") : ""}</div>
+   ${e.orc ? `<div class="stack" style="margin-top:12px" role="img" aria-label="Orçamento"><span style="width:${Math.min(100, pct)}%;background:${pct > 100 ? "var(--out)" : e.cor}"></span></div><p class="hint">${Math.round(pct)}% de <span class="money">${brl(e.orc)}</span></p>` : ""}</section>
+   <section class="grid anim" style="margin-top:18px"><div class="box c6"><h2>Por categoria</h2>${s.sai ? '<div class="chart"><canvas id="chEvCat"></canvas></div>' : empty("chart", "Sem gastos ainda.")}</div>
+   <div class="box c6"><h2>Mês a mês</h2>${meses.length ? '<div class="chart"><canvas id="chEvMes"></canvas></div>' : empty("chart", "Sem lançamentos ainda.")}</div></section>
+   <section class="box anim" style="margin-top:18px"><h2>Por forma de pagamento</h2><div class="list">${Object.entries(s.porConta).sort((a, b) => b[1] - a[1]).map(([k, v]) => `<div class="row"><div class="ic" style="background:color-mix(in srgb,${conta(k).cor} 16%,transparent);color:${conta(k).cor}">${ic("card")}</div><div><div class="t">${esc(conta(k).n)}</div></div><div class="val out"><span class="money">${brl(v)}</span></div><span></span></div>`).join("") || '<p class="hint">Nada ainda.</p>'}</div></section>
+   <section class="box anim" style="margin-top:18px"><h2>Lançamentos do evento <small>${s.fontes.length}</small></h2><div class="list">${s.fontes.map(x => { const k = cat(x.cat), tot = x.src === "avulso" || x.src === "parc" ? "" : "";
+     const det = x.src === "parc" ? `${x.n}× de ${brl(x.v)}` : x.src === "rec" ? `todo mês desde ${short(x.inicio)} (${x.qtd} ${x.qtd === 1 ? "mês" : "meses"})` : short(x.data.slice(0, 7));
+     return `<div class="row" data-edit="${x.src}:${x.id}" role="button" tabindex="0"><div class="ic" style="background:color-mix(in srgb,${k.cor} 16%,transparent);color:${k.cor}">${ic(k.e)}</div><div><div class="t">${esc(x.d)}</div><div class="m"><span class="dot" style="background:${conta(x.conta).cor}"></span>${esc(conta(x.conta).n)} · ${det}</div></div><div class="val ${x.tipo === "entrada" ? "in" : "out"}"><span class="money">${x.tipo === "entrada" ? "+ " : "− "}${brl(Math.abs(x.total)).replace("−", "")}</span></div><span></span></div>`; }).join("") || empty("receipt", "Ainda não há lançamentos. Use “+ Lançar neste evento”.")}</div></section>`;
+}
+function bindEv() {
+  document.querySelectorAll("[data-evopen]").forEach(r => { const go = () => { evSel = r.dataset.evopen; animate = true; render(); }; r.onclick = go; r.onkeydown = e => { if (e.key === "Enter") go(); }; });
+  const on = (id, fn) => { const b = $("#" + id); if (b) b.onclick = fn; };
+  on("evNew", () => editEvent()); on("evBack", () => { evSel = null; animate = true; render(); });
+  on("evEdit", () => editEvent(evSel)); on("evAdd", () => newItem({ ev: evSel }));
+  if (!evSel || !evento(evSel)) return;
+  const s = evStats(evSel), meses = Object.keys(s.porMes).sort();
+  if ($("#chEvCat")) catChart("chEvCat", s.porCat);
+  if ($("#chEvMes")) charts.push(new Chart($("#chEvMes"), { type: "bar", data: { labels: meses.map(short), datasets: [
+    { label: "Saídas", data: meses.map(k => s.porMes[k].sai), backgroundColor: css("--out"), borderRadius: 5 },
+    { label: "Entradas", data: meses.map(k => s.porMes[k].ent), backgroundColor: css("--in"), borderRadius: 5 }] },
+    options: opts({ scales: { x: { grid: { display: false } }, y: { ticks: { callback: v => S.prefs.priv ? "" : brl0(v) } } } }) }));
+}
+function editEvent(id) {
+  const e = id ? evento(id) : { n: "", cor: PAL[EV().length % PAL.length] };
+  openSheet(`<form id="evf"><h2>${id ? "Editar evento" : "Novo evento"}</h2>
+   <label class="fld">Nome<input id="evn" value="${esc(e.n)}" placeholder="Ex: Mudança" autofocus></label>
+   <label class="fld">Orçamento (opcional)<input id="evo" type="number" step="0.01" min="0" inputmode="decimal" placeholder="R$ 0,00" value="${e.orc || ""}"></label>
+   <label class="fld">Cor<input id="evc" type="color" value="${e.cor}" class="swatch" style="width:60px;height:40px"></label>
+   <div class="err" id="eve"></div>
+   <div class="tools" style="justify-content:space-between">${id ? '<button type="button" class="btn danger" id="evdel">Excluir evento</button>' : "<span></span>"}<span class="tools"><button type="button" class="btn" id="evx">Cancelar</button><button class="btn acc">Salvar</button></span></div></form>`, () => {
+    $("#evx").onclick = closeSheet;
+    if (id) $("#evdel").onclick = () => confirmBox("Excluir " + e.n + "?", "Os lançamentos continuam existindo, só deixam de pertencer ao evento.", "Excluir", () => { const snap = snapshot(); [...S.recorrentes, ...S.parcelas, ...S.avulsos].forEach(x => { if (x.ev === id) delete x.ev; }); S.eventos = EV().filter(x => x.id !== id); evSel = null; commit("Evento excluído", restoreFrom(snap)); });
+    $("#evf").onsubmit = ev => { ev.preventDefault(); const n = $("#evn").value.trim(); if (!n) { $("#eve").textContent = "Dê um nome para o evento."; return $("#evn").focus(); }
+      const orc = +$("#evo").value || undefined, cor = $("#evc").value;
+      if (id) { Object.assign(e, { n, orc, cor }); } else { const ne = { id: uid(), n, orc, cor }; EV().push(ne); evSel = ne.id; }
+      closeSheet(); sub = "ev"; commit("Evento salvo"); };
+  });
 }
 function pgCartoes() {
   const c = calc(cur), cards = S.contas.filter(a => !a.pessoa), cr = cards.filter(a => a.tipo === "credito");
@@ -505,6 +579,7 @@ function itemForm(opts) {
    <div class="two"><label class="fld">Categoria<select id="lc">${catOpts(tipo)}</select></label>
     <label class="fld">${tipo === "entrada" ? "Recebido em" : "Pago com"}<select id="lk">${S.contas.map(a => `<option value="${a.id}" ${a.id === defConta ? "selected" : ""}>${esc(a.n)}</option>`).join("")}</select></label></div>
    <label class="fld"><span id="dtLbl">${rep === "mes" ? "Começa em" : rep === "parc" ? "Data da compra" : "Data"}</span><input id="ldt" type="date" value="${dataDef}"></label>
+   ${EV().length ? `<label class="fld">Evento (opcional)<select id="lev"><option value="">nenhum</option>${EV().map(e => `<option value="${e.id}" ${e.id === (it.ev || opts.ev) ? "selected" : ""}>${esc(e.n)}</option>`).join("")}</select></label>` : ""}
    ${editing ? "" : `<div class="fld">Repete?<div class="repeat" id="rSeg"><button type="button" data-r="uma" aria-pressed="${rep === "uma"}">Só uma vez</button><button type="button" data-r="mes" aria-pressed="${rep === "mes"}">Todo mês</button><button type="button" data-r="parc" aria-pressed="${rep === "parc"}">Parcelado</button></div></div>`}
    <div class="fld" id="lnWrap" ${rep === "parc" ? "" : "hidden"}>
      <div class="seg" id="pSeg" style="grid-template-columns:1fr 1fr"><button type="button" data-m="parcela" aria-pressed="true">Digitei o valor da parcela</button><button type="button" data-m="total" aria-pressed="false">Digitei o valor total</button></div>
@@ -530,14 +605,14 @@ function itemForm(opts) {
       const bad = !(v > 0) ? ["#lv", "Digite um valor maior que zero."] : !d ? ["#ld", "Dê um nome para o lançamento."] : !dt ? ["#ldt", "Escolha a data."] : null;
       if (bad) { $("#lerr").textContent = bad[1]; const f = $(bad[0]); f.focus(); f.classList.remove("shake"); f.offsetWidth; f.classList.add("shake"); return; }
       const n = Math.max(2, +$("#ln").value || 2);
-      opts.onSave({ tipo, rep, v: rep === "parc" && modoParc === "total" ? Math.round(v / n * 100) / 100 : v, d, dt, cat: $("#lc").value, conta: $("#lk").value, n, split: $("#sp")?.value ? { p: $("#sp").value, v: +$("#sv").value || v / 2 } : null });
+      opts.onSave({ tipo, rep, v: rep === "parc" && modoParc === "total" ? Math.round(v / n * 100) / 100 : v, d, dt, cat: $("#lc").value, conta: $("#lk").value, ev: $("#lev")?.value || "", n, split: $("#sp")?.value ? { p: $("#sp").value, v: +$("#sv").value || v / 2 } : null });
     };
     opts.bind?.(sh);
   });
 }
 function newItem(pre = {}) {
   itemForm({ title: "Novo lançamento", ...pre, onSave: f => {
-    const b = { id: uid(), d: f.d, v: f.v, cat: f.cat, conta: f.conta };
+    const b = { id: uid(), d: f.d, v: f.v, cat: f.cat, conta: f.conta }; if (f.ev) b.ev = f.ev;
     if (f.rep === "mes") S.recorrentes.push({ ...b, tipo: f.tipo, dia: +f.dt.slice(8), inicio: f.dt.slice(0, 7) });
     else if (f.rep === "parc") S.parcelas.push({ ...b, n: f.n, data: f.dt });
     else S.avulsos.push({ ...b, tipo: f.tipo, data: f.dt });
@@ -566,7 +641,7 @@ function editItem(src, id) {
       if ($("#quitarParc")) $("#quitarParc").onclick = () => { const snap = snapshot(); it.fim = cur; closeSheet(); commit("Quitado — some das faturas a partir de " + short(cur), restoreFrom(snap)); };
     },
     onSave: f => {
-      const snap = snapshot(), upd = { d: f.d, v: f.v, cat: f.cat, conta: f.conta };
+      const snap = snapshot(), upd = { d: f.d, v: f.v, cat: f.cat, conta: f.conta, ev: f.ev || undefined };
       if (src === "rec") {
         if ($("#fromHereYes")?.checked) { S.recorrentes.push({ ...it, ...upd, id: uid(), tipo: f.tipo, dia: +f.dt.slice(8), inicio: cur, fim: it.fim }); it.fim = addM(cur, -1); }
         else Object.assign(it, upd, { tipo: f.tipo, dia: +f.dt.slice(8), inicio: f.dt.slice(0, 7) });
