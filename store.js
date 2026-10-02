@@ -158,6 +158,11 @@
       const r = await fetch(cfg.MESSENGER_URL, { method: "POST", body: JSON.stringify(payload) }); // text/plain: sem preflight CORS
       return r.json();
     },
+    async verifySignup(email, code) {
+      const { data, error } = await sb.rpc("verify_signup", { p_email: email, p_code: code });
+      if (error) throw error;
+      return data;
+    },
     async finishReset(email, code, newPassword) {
       const { data, error } = await sb.rpc("finish_reset", { p_email: email, p_code: code, p_new_password: newPassword });
       if (error) throw error;

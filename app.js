@@ -679,7 +679,7 @@ function evoChart(id, from, to) {
 
 /* ---------- login ---------- */
 /* ---------- login / pedido de conta / recuperação ----------
-   in: entrar · req: pedir acesso (vai para o e-mail do admin) · up: criar conta (só e-mail aprovado, via link ?criar=)
+   in: entrar · up: pede código de verificação por e-mail · upcode: código + senha → libera o e-mail e cria a conta
    forgot: pede código por e-mail · code: código + nova senha + código de recuperação (destrava a criptografia) */
 function showAuth(msg, startMode, preEmail) {
   $("#appShell").hidden = true; $("#fab").hidden = true; $("#bottomnav").hidden = true; $("#authShell").hidden = false;
@@ -696,16 +696,13 @@ function showAuth(msg, startMode, preEmail) {
         <button type="button" class="btn acc" id="aBioGo" style="padding:16px;display:flex;gap:10px;justify-content:center;align-items:center;font-size:16px">Desbloquear</button>
         <div class="err" id="aErr">${esc(msg || "")}</div>
         <button type="button" class="linkbtn" data-m="in" style="text-align:center">Usar senha</button>`,
-      req: `<h2>Pedir acesso</h2><p class="hint">O Fluo é fechado para amigos. Seu pedido vai para o administrador; quando ele aprovar, você recebe um e-mail para criar a senha.</p>
-        <label class="fld">Seu nome<input id="aName" required maxlength="80" autocomplete="name"></label>${emailFld()}
-        <label class="fld">Mensagem (opcional)<input id="aNote" maxlength="300" placeholder="Ex: sou o Lucas, amigo do trabalho"></label>
-        ${E}<button class="btn acc" style="padding:12px">Enviar pedido</button>${back}`,
-      sent: `<div class="empty" style="padding:6px"><div class="blob">📬</div></div><h2>Pedido enviado!</h2>
-        <p class="hint">Assim que for aprovado, chega um e-mail em <b>${esc(email0)}</b> com o link para criar sua senha. Confira também o spam.</p>${back}`,
-      up: `<h2>Criar sua conta</h2><p class="hint">Seu acesso foi aprovado. Crie uma senha com pelo menos 8 caracteres.</p>
-        ${emailFld()}<label class="fld">Senha<input id="aPw" type="password" required minlength="8" autocomplete="new-password"></label>
+      up: `<h2>Criar sua conta</h2><p class="hint">Digite seu e-mail. Vamos mandar um código de 6 dígitos para confirmar que ele é seu.</p>
+        ${emailFld()}${E}<button class="btn acc" style="padding:12px">Enviar código</button>${back}`,
+      upcode: `<h2>Criar sua conta</h2><p class="hint">Digite o código que chegou em <b>${esc(email0)}</b> (confira também o spam) e crie uma senha com pelo menos 8 caracteres.</p>
+        <label class="fld">Código do e-mail<input id="aOtp" required inputmode="numeric" maxlength="6" placeholder="000000" autocomplete="one-time-code" style="letter-spacing:6px;font-family:var(--mono)"></label>
+        <label class="fld">Senha<input id="aPw" type="password" required minlength="8" autocomplete="new-password"></label>
         <label class="fld">Repita a senha<input id="aPw2" type="password" required minlength="8" autocomplete="new-password"></label>
-        ${rememberFld}${E}<button class="btn acc" style="padding:12px">Criar conta</button>${back}`,
+        ${rememberFld}${E}<button class="btn acc" style="padding:12px">Criar conta</button><button type="button" class="linkbtn" data-m="up">Reenviar código</button>`,
       forgot: `<h2>Esqueci a senha</h2><p class="hint">Vamos mandar um código de 6 dígitos para o seu e-mail.</p>${emailFld()}
         ${E}<button class="btn acc" style="padding:12px">Enviar código</button>${back}`,
       code: `<h2>Nova senha</h2><p class="hint">Digite o código que chegou em <b>${esc(email0)}</b>. Para abrir seus dados criptografados, também precisamos do <b>código de recuperação</b> que você guardou ao criar a conta.</p>
@@ -722,8 +719,7 @@ function showAuth(msg, startMode, preEmail) {
         ${rememberFld}${E}<button class="btn acc" style="padding:12px">Entrar</button>
         <button type="button" class="linkbtn" data-m="forgot" style="color:var(--muted)">Esqueci a senha</button>
         <div style="display:flex;align-items:center;gap:10px;color:var(--muted);font-size:12px"><hr style="flex:1;border:0;border-top:1px solid var(--line)">ainda não tem conta?<hr style="flex:1;border:0;border-top:1px solid var(--line)"></div>
-        <button type="button" class="btn" data-m="req" style="padding:12px">Pedir acesso</button>
-        <button type="button" class="linkbtn" data-m="up" style="color:var(--muted);text-align:center">Já fui aprovado · criar minha senha</button>`
+        <button type="button" class="btn" data-m="up" style="padding:12px">Criar conta</button>`
         : `<p class="hint">O login online ainda não foi configurado neste endereço.</p>`}
         <p class="hint" style="font-size:12px">🔒 Seus dados são criptografados no seu aparelho antes de irem para a nuvem. Ninguém além de você consegue lê-los.</p>`,
     };
@@ -749,14 +745,13 @@ function showAuth(msg, startMode, preEmail) {
       const email = ($("#aEmail")?.value || email0).trim().toLowerCase(), pw = $("#aPw")?.value;
       if (email) email0 = email;
       if ($("#aRemember")) Store.setRemember($("#aRemember").checked);
-      if (mode === "req") {
-        const r = await Store.messenger({ action: "request", email, name: $("#aName").value.trim(), note: $("#aNote").value.trim() });
-        if (r.status === "already") { mode = "up"; msg = "Seu e-mail já foi aprovado! Crie sua senha."; return draw(); }
-        if (r.status === "full") return err("Muitos pedidos na fila agora. Tente de novo em alguns dias.");
+      if (mode === "up") {
+        const r = await Store.messenger({ action: "signup", email });
+        if (r.status === "exists") { mode = "in"; msg = "Esse e-mail já tem conta. Entre com sua senha."; return draw(); }
         if (r.status === "invalid") return err("Digite um e-mail válido.");
-        if (r.status === "wait") return err("Pedido já enviado há pouco. Aguarde alguns minutos.");
-        if (r.status !== "created" && r.status !== "pending") throw new Error(r.message || "falha");
-        mode = "sent"; return draw();
+        if (r.status === "wait") return err("Código enviado há pouco. Aguarde um minuto.");
+        if (r.status !== "ok") throw new Error(r.message || "falha");
+        mode = "upcode"; msg = ""; draw(); return toast("Código enviado para " + email);
       }
       if (mode === "forgot") { const r = await Store.messenger({ action: "forgot", email }); if (r.status === "wait") return err("Código enviado há pouco. Aguarde um minuto."); mode = "code"; msg = ""; draw(); return toast("Se existir conta com esse e-mail, o código chegou."); }
       if (mode === "code") {
@@ -767,8 +762,10 @@ function showAuth(msg, startMode, preEmail) {
         S = st; enterApp(); return toast("Senha trocada");
       }
       if (mode === "rec") { const r = await Store.recover($("#aCode").value, pw); S = r.state; enterApp(); toast("Acesso recuperado"); return; }
-      if (mode === "up") {
+      if (mode === "upcode") {
         if (pw !== $("#aPw2").value) return err("As senhas não são iguais.");
+        const v = await Store.verifySignup(email, $("#aOtp").value.trim());
+        if (v.status !== "ok") return err({ wrong: "Código incorreto.", expired: "Código vencido. Peça outro.", locked: "Muitas tentativas. Peça um novo código." }[v.status] || "Não foi possível confirmar o código.");
         const r = await Store.signUp(email, pw, baseState());
         if (r.confirmEmail) { mode = "in"; msg = "Conta criada! Confirme pelo e-mail e depois entre."; return draw(); }
         S = r.state; return showRecovery(r.recoveryCode);
@@ -779,7 +776,7 @@ function showAuth(msg, startMode, preEmail) {
       S = r.state; enterApp();
     } catch (ex) {
       const m = ex?.message || "";
-      err(/NOT_APPROVED|Database error saving/i.test(m) ? "Esse e-mail ainda não foi aprovado. Use “Pedir acesso”." : /Invalid login/i.test(m) ? "E-mail ou senha incorretos." : /registered|already/i.test(m) ? "Esse e-mail já tem conta. Tente entrar." : /fetch|network|Failed/i.test(m) ? "Sem conexão. Verifique a internet." : /decrypt|operation/i.test(m) ? "Código de recuperação incorreto." : "Algo deu errado. Tente de novo.");
+      err(/NOT_APPROVED|Database error saving/i.test(m) ? "Confirme seu e-mail com o código antes de criar a conta." : /Invalid login/i.test(m) ? "E-mail ou senha incorretos." : /registered|already/i.test(m) ? "Esse e-mail já tem conta. Tente entrar." : /fetch|network|Failed/i.test(m) ? "Sem conexão. Verifique a internet." : /decrypt|operation/i.test(m) ? "Código de recuperação incorreto." : "Algo deu errado. Tente de novo.");
     } finally { if (btn.isConnected) { btn.innerHTML = old; btn.disabled = false; } }
   };
   draw();
