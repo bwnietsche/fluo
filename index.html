@@ -1,11 +1,11 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Fluo</title>
-<meta name="description" content="Controle financeiro pessoal: mês a mês, cartões, parcelas, metas e quem te deve.">
-<meta name="theme-color" content="#141a2e">
+<meta name="theme-color" content="#141c18">
+<meta name="description" content="Controle financeiro pessoal: mês a mês, cartões, parcelas e quem te deve. Dados criptografados no seu aparelho.">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Fluo">
@@ -13,51 +13,33 @@
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700&family=IBM+Plex+Mono:wght@500&display=swap">
-<link rel="stylesheet" href="styles.css?v=21">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,800&family=Schibsted+Grotesk:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="styles.css?v=23">
 </head>
 <body>
+<div id="auth" class="auth" hidden></div>
 
-<div class="auth" id="authShell" hidden>
-  <div class="auth-art">
-    <div class="brand"><span class="logo"></span>Fluo</div>
-    <span class="coin"></span><span class="coin"></span><span class="coin"></span>
-    <div><h1>Seu dinheiro, mês a mês.</h1><p>Contas fixas, parcelas, cartões, metas e quem te deve — tudo calculado sozinho, e criptografado para só você ver.</p></div>
-  </div>
-  <div class="auth-form"><form id="authForm" novalidate></form></div>
-</div>
-
-<div class="app" id="appShell" hidden>
-  <aside>
-    <div class="brand"><span class="logo"></span>Fluo</div>
-    <nav id="sidenav" aria-label="Menu"></nav>
-    <div class="side-foot">
-      <div class="side-user"><span id="who"></span></div>
-      <div class="sync" id="sync"><i></i><span id="syncTxt">tudo salvo</span></div>
-    </div>
+<div id="app" class="app" hidden>
+  <aside class="rail">
+    <div class="brand"><svg class="mark" viewBox="12 24 96 72" aria-hidden="true"><circle class="m1" cx="46" cy="60" r="25"/><circle class="m2" cx="74" cy="60" r="25"/></svg>Fluo</div>
+    <nav id="nav"></nav>
+    <div class="rail-foot"><span id="who"></span><span id="sync" class="sync">salvo</span></div>
   </aside>
   <main>
-    <div class="top">
-      <div><h1 id="ttl"></h1><div class="sub" id="ttlSub"></div></div>
-      <div class="tools">
-        <div class="mnav" id="mnav"><button id="prev" aria-label="Mês anterior">‹</button><span id="mlabel"></span><button id="next" aria-label="Próximo mês">›</button><button id="today" class="today" hidden>Hoje</button></div>
-        <button class="btn iconbtn eye" id="eyeBtn" aria-label="Mostrar ou esconder valores" title="Mostrar/esconder valores"></button>
-      </div>
-    </div>
-    <div id="view"></div>
+    <header class="bar">
+      <div class="mnav"><button id="prev" aria-label="Mês anterior">←</button><button id="mlabel" class="mlabel" aria-label="Voltar para hoje"></button><button id="next" aria-label="Próximo mês">→</button><button id="today" class="today" hidden>Hoje</button></div>
+      <div class="bar-r"><button id="eye" class="ghost eye" aria-pressed="false" aria-label="Ocultar valores"></button><button id="add" class="primary">Lançar</button></div>
+    </header>
+    <div id="view" class="view"></div>
   </main>
 </div>
-<nav class="bottomnav" id="bottomnav" aria-label="Menu" hidden></nav>
-<button class="fab" id="fab" hidden aria-label="Novo lançamento"><b>+</b><span>Lançar</span></button>
-<div class="sheet" id="sheet" hidden></div>
-<div class="toast" id="toast" role="status" hidden></div>
+<nav id="dock" class="dock" hidden></nav>
+<div id="sheet" class="sheet" hidden></div>
+<div id="toast" class="toast" role="status" hidden></div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
-<script src="config.js?v=22"></script>
-<script src="store.js?v=22"></script>
-<script>document.getElementById("eyeBtn").innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1.5 12S5.5 4.5 12 4.5 22.5 12 22.5 12 18.5 19.5 12 19.5 1.5 12 1.5 12z"/><g class="lid"><circle cx="12" cy="12" r="3.2"/></g><path class="slash" d="M3 3l18 18"/></svg>'</script>
-<script src="controls.js?v=18"></script>
-<script src="app.js?v=22"></script>
+<script src="config.js?v=23"></script>
+<script src="store.js?v=23"></script>
+<script src="app.js?v=23"></script>
 </body>
 </html>
