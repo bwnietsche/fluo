@@ -12,7 +12,7 @@
 }
 *{box-sizing:border-box;margin:0}
 [hidden]{display:none!important}
-html{-webkit-text-size-adjust:100%}
+html{-webkit-text-size-adjust:100%;background:var(--paper)}
 body{background:var(--paper);color:var(--ink);font:400 15px/1.45 var(--sans);-webkit-font-smoothing:antialiased;min-height:100vh}
 button,input{font:inherit;color:inherit}
 button{cursor:pointer;background:none;border:0}
