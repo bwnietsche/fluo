@@ -89,6 +89,7 @@
     cloudReady,
     get mode() { return mode; },
     get user() { return user; },
+    get client() { return sb; }, // usado por social.js (amigos)
     onStatus(fn) { onStatus = fn; },
 
     /* sessão já aberta (ex.: recarregou a página) */

@@ -26,7 +26,8 @@ const PAL = ["#2d6a4d","#c4573b","#4b5fa8","#c98a12","#a8497e","#2f86a8","#7a8a3
 
 let tlStart = null, lastPage = null, futSel = null, bioOk = false;
 let S = null, cur = NOW, page = "inicio", plano = "parc", filtro = "tudo", agrupar = "dia", busca = "", FS = null;
-const cat = id => S.cats.find(c => c.id === id) || { id, n: "Sem categoria", cor: "#8b8f85", tipo: "saida" };
+const FR = { profile: null, friends: [], inbox: [], last: 0, sig: "" }; // amigos por @ (social.js)
+const cat = id => S.cats.find(c => c.id === id) || (id === "__amigos" ? { id, n: "Divisões com amigos", cor: "#8f7aa8", tipo: "saida" } : { id, n: "Sem categoria", cor: "#8b8f85", tipo: "saida" });
 const conta = id => S.contas.find(c => c.id === id) || { id, n: "Sem conta", cor: "#8b8f85", tipo: "debito" };
 const pessoa = id => S.pessoas.find(p => p.id === id) || { n: "?", cor: "#8b8f85" };
 const evento = id => (S.eventos || []).find(e => e.id === id);
@@ -99,8 +100,16 @@ function shares(it) {
   return { outros, meu };
 }
 const recPend = id => S.pagos[cur]?.["rach:" + id] ? 0 : (calc(cur).recPor[id] || []).reduce((s, x) => s + x.v, 0);
+/* índice (1..n) da parcela da divisão de um amigo no mês k, ou -1 se não cai nesse mês */
+function inboxIdx(s, k) {
+  const i = diffM(s.ini, k); if (i < 0) return -1;
+  if (s.src === "avulso") return i === 0 ? 1 : -1;
+  if (s.src === "parc") return i < s.n && (!s.fim || diffM(k, s.fim) >= 0) ? i + 1 : -1;
+  return !s.fim || diffM(k, s.fim) >= 0 ? i + 1 : -1;
+}
 function monthItems(k) {
   const out = [];
+  FR.inbox.forEach(s => { const n = inboxIdx(s, k); if (n > 0) out.push({ id: "in:" + s.sid, sid: s.sid, src: "amigo", tipo: "saida", d: s.d, v: s.v, cat: "__amigos", conta: "", dia: Math.min(28, s.dia || 10), idx: n, n: s.n || 1, from: s.handle }); });
   S.recorrentes.forEach(r => { if (diffM(r.inicio, k) >= 0 && (!r.fim || diffM(k, r.fim) >= 0)) out.push({ ...r, src: "rec", dia: r.dia || 1 }); });
   S.parcelas.forEach(p => { const i = diffM(startM(p), k); if (i >= 0 && i < p.n && (!p.fim || diffM(k, p.fim) >= 0)) out.push({ ...p, tipo: "saida", src: "parc", idx: i + 1, dia: +p.data.slice(8) }); });
   S.avulsos.forEach(a => { if ((a.fat || a.data.slice(0, 7)) === k) out.push({ ...a, src: "avulso", dia: +a.data.slice(8) }); });
@@ -108,6 +117,7 @@ function monthItems(k) {
   return out.sort((a, b) => b.dia - a.dia);
 }
 const isPaid = (k, it) => {
+  if (it.src === "amigo") return !!S.pagos[k]?.["amigo:" + it.sid];
   if (it.tipo !== "saida") return true;
   const c = conta(it.conta);
   if (c.tipo === "credito") return !!S.pagos[k]?.["card:" + c.id];
@@ -118,9 +128,9 @@ const memo = {};
 function calc(k) {
   const it = monthItems(k), sum = f => it.filter(f).reduce((t, x) => t + x.v, 0), sumM = f => it.filter(f).reduce((t, x) => t + (x.tipo === "saida" ? x.meu : x.v), 0);
   const ent = sum(x => x.tipo === "entrada"), inv = sum(x => x.tipo === "invest"), sai = sumM(x => x.tipo === "saida");
-  const fixo = sumM(x => x.tipo === "saida" && x.src === "rec"), parc = sumM(x => x.src === "parc"), vari = sumM(x => x.tipo === "saida" && x.src === "avulso");
+  const fixo = sumM(x => x.tipo === "saida" && x.src === "rec"), parc = sumM(x => x.src === "parc"), vari = sumM(x => x.tipo === "saida" && (x.src === "avulso" || x.src === "amigo"));
   const porCat = {}, porConta = {}, recPor = {};
-  it.filter(x => x.tipo === "saida").forEach(x => { porCat[x.cat] = (porCat[x.cat] || 0) + x.meu; porConta[x.conta] = (porConta[x.conta] || 0) + x.v; x.outros.forEach(o => (recPor[o.p] ??= []).push({ it: x, v: o.v })); });
+  it.filter(x => x.tipo === "saida").forEach(x => { porCat[x.cat] = (porCat[x.cat] || 0) + x.meu; if (x.src !== "amigo") porConta[x.conta] = (porConta[x.conta] || 0) + x.v; x.outros.forEach(o => (recPor[o.p] ??= []).push({ it: x, v: o.v })); });
   const recebe = Object.values(recPor).flat().reduce((t, x) => t + x.v, 0), recPend = Object.entries(recPor).reduce((t, [id, l]) => t + (S.pagos[k]?.["rach:" + id] ? 0 : l.reduce((s, x) => s + x.v, 0)), 0);
   return { it, ent, inv, sai, fixo, parc, vari, saldo: ent - sai - inv, porCat, porConta, recPor, recebe, recPend };
 }
@@ -128,6 +138,7 @@ function contasDoMes(k) {
   const c = calc(k), out = [];
   S.contas.filter(a => a.tipo === "credito" || a.pessoa).forEach(a => { const v = c.porConta[a.id]; if (v) out.push({ key: "card:" + a.id, fat: a.id, n: a.pessoa ? pessoa(a.pessoa).n : "Fatura " + a.n, sub: a.pessoa ? "o que você usou do cartão dela" : "cartão de crédito", dia: cardVenc(a), v }); });
   c.it.filter(x => x.tipo === "saida" && x.src === "rec" && conta(x.conta).tipo !== "credito" && !conta(x.conta).pessoa).forEach(x => out.push({ key: x.id, n: x.d, sub: cat(x.cat).n + " · " + conta(x.conta).n, dia: x.dia, v: x.v }));
+  c.it.filter(x => x.src === "amigo").forEach(x => out.push({ key: "amigo:" + x.sid, n: x.d + (x.n > 1 ? ` ${x.idx}/${x.n}` : ""), sub: "você deve a @" + x.from, dia: x.dia, v: x.v }));
   out.forEach(o => o.paid = !!S.pagos[k]?.[o.key]);
   return out.sort((a, b) => a.paid - b.paid || a.dia - b.dia);
 }
@@ -136,12 +147,12 @@ const autoDebt = p => { const pc = S.contas.find(c => c.pessoa === p.id); if (!p
 
 /* ---------- persistência, desfazer, aviso ---------- */
 const snap = () => JSON.parse(JSON.stringify(S));
-function commit(msg, undoSnap) { Store.save(S); render(false); if (msg) toast(msg, undoSnap); }
+function commit(msg, undoSnap) { Store.save(S); schedulePush(); render(false); if (msg) toast(msg, undoSnap); }
 let toastT;
 function toast(t, undoSnap) {
   const el = $("#toast"); el.innerHTML = esc(t) + (undoSnap ? " <button data-a='undo'>Desfazer</button>" : ""); el.hidden = false;
   el.style.animation = "none"; el.offsetHeight; el.style.animation = "";
-  A.undo = () => { S = undoSnap; el.hidden = true; Store.save(S); render(false); };
+  A.undo = () => { S = undoSnap; el.hidden = true; Store.save(S); schedulePush(); render(false); };
   clearTimeout(toastT); toastT = setTimeout(() => el.hidden = true, undoSnap ? 9000 : 2400);
 }
 
@@ -235,7 +246,7 @@ function pgExtrato() {
   const gl = agrupar === "conta" ? k => conta(k).n : agrupar === "cat" ? k => cat(k).n : k => "Dia " + k;
   const grp = {}; it.forEach(x => (grp[gk(x)] ??= []).push(x));
   const keys = Object.keys(grp).sort(agrupar === "dia" ? (a, b) => b - a : (a, b) => grp[b].reduce((t, x) => t + x.v, 0) - grp[a].reduce((t, x) => t + x.v, 0));
-  const line = x => `<button class="ln" data-a="edit" data-src="${x.src}" data-id="${x.id}"><span class="d">${agrupar === "dia" ? "" : "dia " + x.dia}</span><span style="min-width:0"><span class="t" style="display:block">${esc(x.d)}${x.ev && evento(x.ev) ? `<span class="tag ev">${esc(evento(x.ev).n)}</span>` : ""}${x.rach?.length ? `<span class="tag">dividido</span>` : ""}</span><span class="s" style="display:block">${esc(cat(x.cat).n)} · ${esc(conta(x.conta).n)}${x.src === "parc" ? ` · ${x.idx}/${x.n}` : x.src === "rec" ? " · todo mês" : ""}</span></span><span class="v ${x.tipo === "entrada" ? "pos" : ""}">${x.tipo === "entrada" ? "+" : ""}${M(x.v)}</span></button>`;
+  const line = x => `<button class="ln" data-a="edit" data-src="${x.src}" data-id="${x.id}"><span class="d">${agrupar === "dia" ? "" : "dia " + x.dia}</span><span style="min-width:0"><span class="t" style="display:block">${esc(x.d)}${x.ev && evento(x.ev) ? `<span class="tag ev">${esc(evento(x.ev).n)}</span>` : ""}${x.rach?.length ? `<span class="tag">dividido</span>` : ""}${x.src === "amigo" ? `<span class="tag">@${esc(x.from)}</span>` : ""}</span><span class="s" style="display:block">${esc(cat(x.cat).n)} · ${x.src === "amigo" ? "você deve" : esc(conta(x.conta).n)}${x.src === "parc" || x.src === "amigo" && x.n > 1 ? ` · ${x.idx}/${x.n}` : x.src === "rec" ? " · todo mês" : ""}</span></span><span class="v ${x.tipo === "entrada" ? "pos" : ""}">${x.tipo === "entrada" ? "+" : ""}${M(x.v)}</span></button>`;
   const totEnt = it.filter(x => x.tipo === "entrada").reduce((t, x) => t + x.v, 0), totSai = it.filter(x => x.tipo === "saida").reduce((t, x) => t + x.v, 0);
   return `<div class="tools"><input class="search" id="busca" type="search" placeholder="Buscar nome, categoria ou cartão" value="${esc(busca)}" aria-label="Buscar">
      <div class="seg">${[["tudo", "Tudo"], ["saida", "Saídas"], ["entrada", "Entradas"], ["aberto", "A pagar"]].map(([k, t]) => `<button data-a="filtro" data-v="${k}" aria-pressed="${filtro === k}">${t}</button>`).join("")}</div>
@@ -249,12 +260,12 @@ function pgCarteira() {
   const c = calc(cur), cards = S.contas.filter(a => a.tipo === "credito" && !a.pessoa), others = S.contas.filter(a => a.tipo !== "credito" && !a.pessoa);
   const card = a => { const v = c.porConta[a.id] || 0, paid = !!S.pagos[cur]?.["card:" + a.id]; return `<button class="card ${paid && v ? "paid" : ""}" style="--c:${a.cor};color:${readableOn(a.cor)}" data-a="conta" data-id="${a.id}"><div><div class="k">${paid && v ? "fatura paga" : "vence dia " + (a.venc || (a.fecha ? vencDeFecha(a.fecha) : "?"))}</div><div class="n">${esc(a.n)}</div></div><div><div class="v money num">${brl(v)}</div>${a.limite ? `<div class="lim"><i style="width:${Math.min(100, v / a.limite * 100)}%"></i></div><div class="k" style="margin-top:6px">${Math.round(v / a.limite * 100)}% do limite</div>` : ""}</div></button>`; };
   const pr = p => { const du = autoDebt(p) + S.dividas.filter(d => d.pessoa === p.id && d.dir === "devo").reduce((t, d) => t + Math.max(0, restante(d)), 0), re = S.dividas.filter(d => d.pessoa === p.id && d.dir === "me_deve").reduce((t, d) => t + Math.max(0, restante(d)), 0), net = re + recPend(p.id) - du;
-    return `<button class="ln person" data-a="pessoa" data-id="${p.id}"><span class="av" style="--c:${p.cor};color:${readableOn(p.cor)}">${esc(p.n[0] || "?")}</span><span><span class="t" style="display:block">${esc(p.n)}</span><span class="s" style="display:block">${net === 0 ? "sem pendências" : net > 0 ? "te deve" : "você deve"}</span></span><span class="v ${net > 0 ? "pos" : net < 0 ? "neg" : ""}">${net === 0 ? "—" : M(Math.abs(net))}</span></button>`; };
+    return `<button class="ln person" data-a="pessoa" data-id="${p.id}"><span class="av" style="--c:${p.cor};color:${readableOn(p.cor)}">${esc(p.n.replace(/^@/, "")[0]?.toUpperCase() || "?")}</span><span><span class="t" style="display:block">${esc(p.n)}</span><span class="s" style="display:block">${p.amigo ? "@" + esc(p.amigo.handle) + " · " : ""}${net === 0 ? "sem pendências" : net > 0 ? "te deve" : "você deve"}</span></span><span class="v ${net > 0 ? "pos" : net < 0 ? "neg" : ""}">${net === 0 ? "—" : M(Math.abs(net))}</span></button>`; };
   return `<div class="h"><h2>Cartões de crédito</h2><button class="aside" data-a="novaConta">+ novo cartão</button></div>
    ${cards.length ? `<div class="wallet">${cards.map(card).join("")}</div>` : `<p class="empty">Nenhum.</p>`}
    <div class="h"><h2>Débito, boletos e outros</h2></div>${others.map(a => `<button class="ln" data-a="editConta" data-id="${a.id}" style="grid-template-columns:minmax(0,1fr) auto"><span class="t">${esc(a.n)}</span><span class="v">${M(c.porConta[a.id] || 0)}</span></button>`).join("")}
-   <div class="h"><h2>Pessoas</h2><span class="aside"><button data-a="novaDivida">+ dívida</button> · <button data-a="novaPessoa">+ pessoa</button></span></div>
-   ${S.pessoas.map(pr).join("") || `<p class="empty">Ninguém ainda.</p>`}`;
+   <div class="h"><h2>Pessoas</h2><span class="aside"><button data-a="novaDivida">+ dívida</button> · <button data-a="novoAmigo">+ amigo</button> · <button data-a="novaPessoa">+ pessoa</button></span></div>
+   ${pedidosHtml()}${S.pessoas.map(pr).join("") || `<p class="empty">Ninguém ainda.</p>`}`;
 }
 function cicloHtml(a) {
   const t = today(), c = cardCycle(a, t), next = dstr(+t.slice(8) <= c.fecha ? t.slice(0, 7) : addM(t.slice(0, 7), 1), c.fecha), n = daysBetween(t, next);
@@ -272,14 +283,14 @@ function contaSheet(id) {
 /* ---------- pessoas e dívidas ---------- */
 function pessoaSheet(id) {
   const p = pessoa(id), pc = S.contas.find(c => c.pessoa === id), au = autoDebt(p), pago = !!S.pagos[cur]?.["card:" + pc?.id], dv = S.dividas.filter(d => d.pessoa === id);
-  openSheet(`<h3>${esc(p.n)}</h3>
+  openSheet(`<h3>${esc(p.n)}</h3>${p.amigo ? `<p class="lede">@${esc(p.amigo.handle)} · amigo</p>` : ""}
    ${pc ? `<div class="h"><h2>Cartão dela em ${label(cur)}</h2><span class="aside">${M(calc(cur).porConta[pc.id] || 0)}</span></div><button class="${pago ? "secondary" : "primary"}" data-a="pay" data-k="card:${pc.id}" data-keep="1">${pago ? "Pago · reabrir" : "Marcar como pago"}</button>` : ""}
    ${(() => { const rl = calc(cur).recPor[id] || [], rt = rl.reduce((s, x) => s + x.v, 0), got = !!S.pagos[cur]?.["rach:" + id]; return rl.length ? `<div class="h"><h2>Divisão de ${label(cur)}</h2><span class="aside">${M(rt)}</span></div>${rl.map(x => `<div class="ln" style="grid-template-columns:minmax(0,1fr) auto"><span class="t" style="min-width:0">${esc(x.it.d)}${x.it.src === "parc" ? ` <span class="mute">${x.it.idx}/${x.it.n}</span>` : ""}</span><span class="v">${M(x.v)}</span></div>`).join("")}<div class="acts" style="margin-top:12px"><button class="${got ? "secondary" : "primary"}" data-a="recebido" data-id="${id}">${got ? "Recebido · reabrir" : "Marcar como recebido"}</button></div>` : ""; })()}
    <div class="h"><h2>Dívidas</h2></div>
    ${dv.map(d => { const r = restante(d); return `<div class="ln" style="grid-template-columns:minmax(0,1fr) auto"><div><div class="t">${esc(d.d)}</div><div class="s">${d.dir === "me_deve" ? "te deve" : "você deve"} · de ${brl(d.v)}${r <= 0 ? " · quitada" : ""}</div></div><span class="v ${d.dir === "me_deve" ? "pos" : "neg"}">${M(Math.max(r, 0))}</span>
      ${r > 0 ? `<div style="grid-column:1/-1;display:flex;gap:8px;align-items:center"><input class="in" id="pg${d.id}" placeholder="valor pago" inputmode="decimal" style="font-size:15px;max-width:140px"><button class="chip" data-a="pagarDivida" data-id="${d.id}" data-part="1">Registrar</button><button class="chip" data-a="pagarDivida" data-id="${d.id}">Quitar tudo</button></div>` : ""}
      <button class="danger" data-a="delDivida" data-id="${d.id}" style="grid-column:1/-1;text-align:left;font-size:13px">Apagar dívida</button></div>`; }).join("") || `<p class="empty">Nenhuma.</p>`}
-   <div class="acts"><button class="primary" data-a="novaDivida" data-p="${id}">Nova dívida</button><button class="secondary" data-a="editPessoa" data-id="${id}">Editar</button></div>`);
+   <div class="acts"><button class="primary" data-a="novaDivida" data-p="${id}">Nova dívida</button><button class="secondary" data-a="editPessoa" data-id="${id}">Editar</button>${p.amigo ? `<button class="danger" data-a="amigoRem" data-uid="${p.amigo.uid}">Desfazer amizade</button>` : ""}</div>`);
 }
 function pessoaForm(id) {
   const p = id ? pessoa(id) : null, pc = id ? S.contas.find(c => c.pessoa === id) : null;
@@ -329,12 +340,13 @@ function pgPlano() {
    ${evs.map(({ e, s }) => `<button class="ln" data-a="evento" data-id="${e.id}" style="grid-template-columns:minmax(0,1fr) auto"><span><span class="t" style="display:block">${esc(e.n)}</span><span class="s" style="display:block">${s.n} lançamentos${e.orc ? ` · orçamento ${brl0(e.orc)}` : ""}</span></span><span class="v">${M(s.gasto)}</span>${e.orc ? `<div class="bars" style="grid-column:1/-1"><div class="track" style="height:6px;background:var(--paper2);border-radius:3px;overflow:hidden"><i style="display:block;height:100%;width:${Math.min(100, s.gasto / e.orc * 100)}%;background:${s.gasto > e.orc ? "var(--neg)" : "var(--pos)"}"></i></div></div>` : ""}</button>`).join("") || `<p class="empty">Nenhum.</p>`}`;
 }
 function divHtml() {
-  const c = calc(cur), ids = Object.keys(c.recPor);
-  if (!ids.length) return `<p class="empty">Nenhuma divisão em ${label(cur)}.</p>`;
+  const c = calc(cur), ids = Object.keys(c.recPor), dv = c.it.filter(x => x.src === "amigo");
+  const devoHtml = dv.length ? `<div class="h"><h2>Você deve</h2><span class="aside">${M(dv.reduce((t, x) => t + x.v, 0))}</span></div>` + dv.map(x => payRow({ key: "amigo:" + x.sid, n: x.d + (x.n > 1 ? ` ${x.idx}/${x.n}` : ""), sub: "@" + x.from, dia: x.dia, v: x.v, paid: !!S.pagos[cur]?.["amigo:" + x.sid] })).join("") : "";
+  if (!ids.length) return devoHtml || `<p class="empty">Nenhuma divisão em ${label(cur)}.</p>`;
   return `<p class="lede">A receber em ${label(cur)}: <b class="money">${brl(c.recebe)}</b></p>` + ids.map(id => {
     const p = pessoa(id), l = c.recPor[id], t = l.reduce((s, x) => s + x.v, 0), got = !!S.pagos[cur]?.["rach:" + id];
     return `<div class="h"><h2>${esc(p.n)}</h2><span class="aside">${M(t)}</span></div>${l.map(x => `<button class="ln" data-a="edit" data-src="${x.it.src}" data-id="${x.it.id}" style="grid-template-columns:minmax(0,1fr) auto"><span class="t" style="min-width:0">${esc(x.it.d)}${x.it.src === "parc" ? ` <span class="mute">${x.it.idx}/${x.it.n}</span>` : ""}</span><span class="v">${M(x.v)}</span></button>`).join("")}<div class="acts" style="margin-top:12px"><button class="${got ? "secondary" : "primary"}" data-a="recebido" data-id="${id}">${got ? "Recebido · reabrir" : "Marcar como recebido"}</button></div>`;
-  }).join("");
+  }).join("") + devoHtml;
 }
 function evStats(id) {
   let gasto = 0, ent = 0, n = 0; const meses = {};
@@ -397,6 +409,7 @@ function pgAjustes() {
   return `<div class="h"><h2>Aparência</h2></div>${seg("tema", [{ v: "auto", l: "Noite musgo" }, { v: "light", l: "Papel" }], th).replace(/data-a="set" data-f="tema"/g, 'data-a="tema"')}
    <div class="h"><h2>Categorias</h2><button class="aside" data-a="novaCat">+ nova</button></div>${S.cats.map(c => `<button class="ln" data-a="editCat" data-id="${c.id}" style="grid-template-columns:14px minmax(0,1fr) auto"><i style="width:10px;height:10px;border-radius:3px;background:${c.cor}"></i><span class="t">${esc(c.n)}</span><span class="s">${{ saida: "saída", entrada: "entrada", invest: "investimento" }[c.tipo]}</span></button>`).join("")}
    <div class="h"><h2>Formas de pagamento</h2><button class="aside" data-a="novaConta">+ nova</button></div>${S.contas.filter(a => !a.pessoa).map(a => `<button class="ln" data-a="editConta" data-id="${a.id}" style="grid-template-columns:14px minmax(0,1fr) auto"><i style="width:10px;height:10px;border-radius:3px;background:${a.cor}"></i><span class="t">${esc(a.n)}</span><span class="s">${{ debito: "débito / pix", boleto: "boleto", credito: "crédito" + (a.venc ? ", vence dia " + a.venc : "") }[a.tipo]}</span></button>`).join("")}
+   ${window.Social?.available() ? `<div class="h"><h2>Amigos</h2></div>${FR.profile ? `<p class="lede">Seu @ é <b>@${esc(FR.profile.handle)}</b>. Quem souber seu @ pode te pedir amizade.</p>` : `<div class="acts" style="margin-top:0"><button class="secondary" data-a="meuHandle">Criar meu @</button></div>`}` : ""}
    <div class="h"><h2>Ao abrir o Fluo</h2></div>${(() => { const em = Store.user?.email || "", m = Store.remembered ? "direto" : Store.bioEnabled(em) ? "bio" : "senha"; return `<div class="seg">${[["direto", "Entrar direto"], ...(bioOk ? [["bio", "Biometria"]] : []), ["senha", "Pedir a senha"]].map(([v, l]) => `<button data-a="openMode" data-v="${v}" aria-pressed="${m === v}">${l}</button>`).join("")}</div>`; })()}
    <div class="h"><h2>Avisos</h2></div><div class="acts" style="margin-top:12px"><button class="secondary" data-a="avisosOn">Ativar notificações do aparelho</button></div>
    <div class="h"><h2>Conta</h2></div><p class="lede">${esc(Store.user?.email || "")}</p>
@@ -475,7 +488,7 @@ function lancar(it, src) {
   FS.save = () => {
     const f = FS, v = num(f.v); if (!v) { toast("Informe o valor"); return; }
     const s0 = snap(), cid = f.cat || guessCat(f.d, f.tipo), d = f.d.trim() || cat(cid).n, n = Math.max(2, +f.n || 2), ev = f.ev || undefined;
-    const rach = f.tipo === "saida" && f.rach.length ? f.rach.map(r => r.m === "fixo" ? { p: r.p, m: "fixo", v: num(r.vs ?? r.v) } : { p: r.p, m: "igual" }) : undefined;
+    const rach = f.tipo === "saida" && f.rach.length ? f.rach.map(r => { const sid = pessoa(r.p).amigo ? (r.sid || crypto.randomUUID()) : undefined; return r.m === "fixo" ? { p: r.p, m: "fixo", v: num(r.vs ?? r.v), sid } : { p: r.p, m: "igual", sid }; }) : undefined;
     if (rach && shares({ v: f.rep === "parc" && f.tot ? v / n : v, rach }).meu < 0) { toast("Os valores fixos passam do total"); return; }
     const cr = creditCycle(f.conta, f.tipo, f.data), chg = edit && (f.data !== it.data || f.conta !== it.conta);
     if (!edit) {
@@ -501,11 +514,92 @@ function calendar(f) {
 }
 
 /* ---------- ações (um ouvinte só) ---------- */
+/* ---------- amigos por @ ---------- */
+let pushing = false, pushT = null;
+async function refreshSocial() {
+  if (!S || !window.Social?.available()) return; FR.last = Date.now();
+  try {
+    FR.profile = await Social.profile();
+    if (FR.profile) { FR.friends = await Social.friends(); linkFriends(); FR.inbox = S.keys ? await Social.inbox(S.keys, FR.friends) : []; await pushShares(); }
+    const sig = JSON.stringify([FR.profile?.handle, FR.friends.map(f => [f.id, f.status]), FR.inbox.map(s => [s.sid, s.v, s.ini, s.n, s.fim, s.d])]);
+    softRender(sig);
+  } catch (e) { /* tabelas de amigos ainda não existem ou sem rede: o app segue normal */ }
+}
+/* redesenha só quando algo mudou e a tela está livre (sem janela aberta nem digitação); se estiver ocupada, tenta de novo logo depois */
+function softRender(sig, tries = 0) {
+  if (sig === FR.sig) return;
+  if ($("#sheet").hidden && !document.activeElement?.matches?.("input")) { FR.sig = sig; render(false); }
+  else if (tries < 12) setTimeout(() => softRender(sig, tries + 1), 700);
+}
+/* cada amigo aceito vira uma "pessoa" (com @) para usar em Dividir com */
+function linkFriends() {
+  const acc = FR.friends.filter(f => f.status === "accepted"); let changed = false;
+  acc.forEach(f => {
+    const p = S.pessoas.find(x => x.amigo?.uid === f.uid);
+    if (!p) { S.pessoas.push({ id: uid(), n: "@" + f.handle, cor: PAL[(S.pessoas.length + 3) % PAL.length], amigo: { uid: f.uid, handle: f.handle } }); changed = true; }
+    else if (p.amigo.handle !== f.handle) { if (p.n === "@" + p.amigo.handle) p.n = "@" + f.handle; p.amigo.handle = f.handle; changed = true; }
+  });
+  S.pessoas.forEach(p => { if (p.amigo && !acc.some(f => f.uid === p.amigo.uid)) { delete p.amigo; changed = true; } });
+  if (changed) Store.save(S);
+}
+/* envia aos amigos (cifrado) as divisões novas/alteradas e avisa as removidas */
+async function pushShares() {
+  if (pushing || !FR.profile || !S.keys) return; pushing = true;
+  try {
+    S.sent ??= {};
+    const frs = Object.fromEntries(FR.friends.filter(f => f.status === "accepted").map(f => [f.uid, f])), want = {};
+    const add = (it, src) => (it.rach || []).forEach((r, i) => {
+      const p = S.pessoas.find(x => x.id === r.p); if (!p?.amigo || !frs[p.amigo.uid] || !r.sid) return;
+      want[r.sid] = { to: p.amigo.uid, obj: { d: it.d, src, v: shares(it).outros[i].v, n: it.n, ini: src === "rec" ? it.inicio : startM(it), fim: it.fim, dia: it.dia || +String(it.data || "").slice(8) || 10 } };
+    });
+    S.avulsos.forEach(it => add(it, "avulso")); S.parcelas.forEach(it => add(it, "parc")); S.recorrentes.forEach(it => add(it, "rec"));
+    let dirty = false;
+    for (const [sid, w] of Object.entries(want)) { const j = JSON.stringify(w.obj); if (S.sent[sid]?.j === j && S.sent[sid]?.to === w.to) continue; try { await Social.send(sid, w.to, frs[w.to].pub, S.keys, w.obj, false); S.sent[sid] = { to: w.to, j }; dirty = true; } catch (e) {} }
+    for (const [sid, s] of Object.entries(S.sent)) { if (want[sid]) continue; try { if (frs[s.to]) await Social.send(sid, s.to, frs[s.to].pub, S.keys, null, true); delete S.sent[sid]; dirty = true; } catch (e) {} }
+    if (dirty) Store.save(S);
+  } finally { pushing = false; }
+}
+function schedulePush() { if (!FR.profile) return; clearTimeout(pushT); pushT = setTimeout(pushShares, 1500); }
+addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && S && Date.now() - FR.last > 20000) refreshSocial(); });
+function pedidosHtml() {
+  return FR.friends.filter(f => f.status === "pending").map(f => f.mine
+    ? `<div class="ln" style="grid-template-columns:minmax(0,1fr) auto"><span><span class="t" style="display:block">@${esc(f.handle)}</span><span class="s" style="display:block">aguardando resposta</span></span><button class="chip" data-a="amigoDel" data-id="${f.id}">Cancelar</button></div>`
+    : `<div class="ln" style="grid-template-columns:minmax(0,1fr) auto"><span><span class="t" style="display:block">@${esc(f.handle)}</span><span class="s" style="display:block">quer ser seu amigo</span></span><span style="display:flex;gap:8px"><button class="chip" data-a="amigoResp" data-id="${f.id}" data-ok="1">Aceitar</button><button class="chip" data-a="amigoResp" data-id="${f.id}">Recusar</button></span></div>`).join("");
+}
+function handleForm() {
+  form("Escolha seu @", { h: "", err: "" }, f => `${fld("Seu @", `<input class="in" data-f="h" value="${esc(f.h)}" placeholder="ex.: ana_souza" autocapitalize="none" autocomplete="off" spellcheck="false" autofocus>`)}${f.err ? `<div class="err">${esc(f.err)}</div>` : ""}<div class="acts"><button class="primary" data-a="save">Criar meu @</button><button class="secondary" data-a="x">Cancelar</button></div>`);
+  FS.save = async () => {
+    const h = FS.h.trim().replace(/^@/, "").toLowerCase();
+    if (!/^[a-z0-9_]{3,20}$/.test(h)) { FS.err = "Use de 3 a 20 letras minúsculas, números ou _"; return FS.draw(); }
+    try {
+      if (!S.keys) S.keys = await Social.newKeys();
+      Store.save(S); await Store.flush(); // a chave privada precisa estar guardada no cofre ANTES de publicar a pública
+      const r = await Social.setHandle(h, S.keys.pub);
+      if (r.status === "taken") { FS.err = "Esse @ já está em uso."; return FS.draw(); }
+      if (r.status !== "ok") { FS.err = "Não foi possível criar o @."; return FS.draw(); }
+      FR.profile = { handle: r.handle, pub: S.keys.pub }; closeSheet(); toast("Seu @ é @" + r.handle); setTimeout(amigoForm, 450);
+    } catch (e) { FS.err = "Sem conexão com o servidor de amigos. Tente de novo."; FS.draw(); }
+  };
+}
+function amigoForm() {
+  if (!FR.profile) return handleForm();
+  form("Adicionar amigo", { h: "", err: "" }, f => `${fld("@ do amigo", `<input class="in" data-f="h" value="${esc(f.h)}" placeholder="@usuario" autocapitalize="none" autocomplete="off" spellcheck="false" autofocus>`)}${f.err ? `<div class="err">${esc(f.err)}</div>` : ""}<div class="acts"><button class="primary" data-a="save">Enviar pedido</button><button class="secondary" data-a="x">Cancelar</button></div>`);
+  FS.save = async () => {
+    const h = FS.h.trim().replace(/^@/, "").toLowerCase(); if (h.length < 3) { FS.err = "Digite o @ do amigo."; return FS.draw(); }
+    try {
+      const r = await Social.request(h), msg = { sent: "Pedido enviado para @" + h, accepted: "Vocês agora são amigos", pending: "Você já enviou um pedido para @" + h, exists: "Vocês já são amigos" }[r.status];
+      if (msg) { closeSheet(); toast(msg); refreshSocial(); return; }
+      FS.err = { unknown: "Não achei esse @.", self: "Esse é o seu próprio @.", limit: "Você tem pedidos pendentes demais.", noprofile: "Crie seu @ primeiro." }[r.status] || "Não foi possível enviar."; FS.draw();
+    } catch (e) { FS.err = "Sem conexão com o servidor de amigos."; FS.draw(); }
+  };
+}
+if (location.hostname === "localhost") window.__fluo = { get S() { return S; }, FR, refreshSocial, pushShares }; // só para testes locais
+
 const A = {
   go: d => { cur = d.k; render(false); },
-  nav: d => { page = d.p; render(true); },
+  nav: d => { page = d.p; render(true); if (["carteira", "plano", "pagar"].includes(d.p) && Date.now() - FR.last > 20000) refreshSocial(); },
   pay: (d, b) => { (S.pagos[cur] ??= {}); const k = d.k; S.pagos[cur][k] = !S.pagos[cur][k]; const keep = d.keep; Store.save(S); const open = !$("#sheet").hidden; render(false); if (open && keep) { const id = k.slice(5); if ($("#sheet h3")) { const pc = S.contas.find(c => c.id === id); pc?.pessoa ? pessoaSheet(pc.pessoa) : contaSheet(id); } } toast(S.pagos[cur][k] ? "Pago ✓" : "Reaberto"); },
-  edit: d => { const it = { rec: S.recorrentes, parc: S.parcelas, avulso: S.avulsos }[d.src].find(x => x.id === d.id); if (it) lancar(it, d.src); },
+  edit: d => { const arr = { rec: S.recorrentes, parc: S.parcelas, avulso: S.avulsos }[d.src], it = arr?.find(x => x.id === d.id); if (it) lancar(it, d.src); },
   filtro: d => { filtro = d.v; render(false); }, agrupar: d => { agrupar = d.v; render(false); }, plano: d => { plano = d.v; render(false); },
   conta: d => contaSheet(d.id), pessoa: d => pessoaSheet(d.id), evento: d => eventoSheet(d.id),
   novaConta: () => contaForm(), editConta: d => contaForm(d.id), novaPessoa: () => pessoaForm(), editPessoa: d => pessoaForm(d.id), novaDivida: d => dividaForm(d.p),
@@ -516,6 +610,10 @@ const A = {
   rachTog: d => { const i = FS.rach.findIndex(r => r.p === d.p); if (i >= 0) FS.rach.splice(i, 1); else FS.rach.push({ p: d.p, m: "igual" }); FS.draw(); },
   rachMode: d => { const r = FS.rach.find(x => x.p === d.p); if (r) r.m = d.m; FS.draw(); },
   recebido: d => { (S.pagos[cur] ??= {}); const k = "rach:" + d.id; S.pagos[cur][k] = !S.pagos[cur][k]; Store.save(S); const open = !$("#sheet").hidden; render(false); if (open) pessoaSheet(d.id); toast(S.pagos[cur][k] ? "Recebido ✓" : "Reaberto"); },
+  novoAmigo: () => amigoForm(), meuHandle: () => handleForm(),
+  amigoResp: async d => { try { await Social.respond(d.id, !!d.ok); toast(d.ok ? "Amigo adicionado" : "Pedido recusado"); } catch (e) { toast("Não foi possível responder."); } refreshSocial(); },
+  amigoDel: async d => { try { await Social.remove(d.id); } catch (e) {} refreshSocial(); },
+  amigoRem: d => { confirmFn = async () => { const f = FR.friends.find(x => x.uid === d.uid); if (!f) return; try { await Social.remove(f.id); toast("Amizade desfeita"); } catch (e) { toast("Não foi possível desfazer."); } refreshSocial(); }; openSheet(`<h3>Desfazer amizade?</h3><p class="lede">As divisões compartilhadas entre vocês deixam de aparecer para os dois.</p><div class="acts"><button class="primary" data-a="confirmYes" style="background:var(--neg)">Desfazer amizade</button><button class="secondary" data-a="x">Cancelar</button></div>`); },
   cpToggle: d => { if (FS.cp?.f === d.f) FS.cp = null; else { const [h, s, v] = hexToHsv(FS[d.f]); FS.cp = { f: d.f, h, s, v }; } FS.draw(); },
   set: d => { const v = d.val === "true" ? true : d.val === "false" ? false : d.val; FS[d.f] = v; if (FS.cp && FS.cp.f === d.f && /^#/.test(v)) { const [h, s, vv] = hexToHsv(v); Object.assign(FS.cp, { h, s, v: vv }); } FS.onSet?.(d.f); FS.draw(); },
   calm: d => { FS.calM = addM(FS.calM, +d.n); FS.calDir = +d.n > 0 ? "r" : "l"; FS.draw(); FS.calDir = null; },
@@ -626,6 +724,8 @@ function enter(state) {
   clearInterval(window.__lgT); S = state; S.pagos ??= {}; S.metas ??= []; S.eventos ??= []; S.prefs ??= { theme: "auto", priv: false };
   $("#auth").hidden = true; $("#app").hidden = false; $("#dock").hidden = false;
   $("#who").textContent = Store.user?.email || ""; Store.bioSupported().then(v => { bioOk = v; if (page === "ajustes") render(false); }); applyTheme(); render(true); setTimeout(pushNotices, 1500);
+  FR.profile = null; FR.friends = []; FR.inbox = []; FR.sig = ""; setTimeout(refreshSocial, 900);
+  if (!window.__frT) window.__frT = setInterval(() => { if (document.visibilityState === "visible" && S && Date.now() - FR.last > 80000) refreshSocial(); }, 30000);
 }
 
 /* ---------- entrada ---------- */
