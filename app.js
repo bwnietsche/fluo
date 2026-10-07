@@ -24,7 +24,7 @@ const fnum = v => String(Math.round(v * 100) / 100).replace(".", ",");
 const NOW = today().slice(0, 7);
 const PAL = ["#2d6a4d","#c4573b","#4b5fa8","#c98a12","#a8497e","#2f86a8","#7a8a3a","#8a6a9e","#7a3fb0","#5b6b57","#1f6f8b","#b5604a"];
 
-let tlStart = null, lastPage = null, futSel = null, bioOk = false;
+let tlStart = null, lastPage = null, futSel = null, bioOk = false, ajTab = "sistema";
 let S = null, cur = NOW, page = "inicio", plano = "parc", filtro = "tudo", agrupar = "dia", busca = "", FS = null;
 const FR = { profile: null, friends: [], inbox: [], last: 0, sig: "" }; // amigos por @ (social.js)
 const cat = id => S.cats.find(c => c.id === id) || (id === "__amigos" ? { id, n: "Divisões com amigos", cor: "#8f7aa8", tipo: "saida" } : { id, n: "Sem categoria", cor: "#8b8f85", tipo: "saida" });
@@ -264,8 +264,8 @@ function pgCarteira() {
   return `<div class="h"><h2>Cartões de crédito</h2><button class="aside" data-a="novaConta">+ novo cartão</button></div>
    ${cards.length ? `<div class="wallet">${cards.map(card).join("")}</div>` : `<p class="empty">Nenhum.</p>`}
    <div class="h"><h2>Débito, boletos e outros</h2></div>${others.map(a => `<button class="ln" data-a="editConta" data-id="${a.id}" style="grid-template-columns:minmax(0,1fr) auto"><span class="t">${esc(a.n)}</span><span class="v">${M(c.porConta[a.id] || 0)}</span></button>`).join("")}
-   <div class="h"><h2>Pessoas</h2><span class="aside"><button data-a="novaDivida">+ dívida</button> · <button data-a="novoAmigo">+ amigo</button> · <button data-a="novaPessoa">+ pessoa</button></span></div>
-   ${pedidosHtml()}${S.pessoas.map(pr).join("") || `<p class="empty">Ninguém ainda.</p>`}`;
+   <div class="h"><h2>Pessoas</h2><span class="aside"><button data-a="novaDivida">+ dívida</button> · <button data-a="novaPessoa">+ pessoa</button></span></div>
+   ${S.pessoas.map(pr).join("") || `<p class="empty">Ninguém ainda.</p>`}`;
 }
 function cicloHtml(a) {
   const t = today(), c = cardCycle(a, t), next = dstr(+t.slice(8) <= c.fecha ? t.slice(0, 7) : addM(t.slice(0, 7), 1), c.fecha), n = daysBetween(t, next);
@@ -405,15 +405,30 @@ function metaForm(id) {
 
 /* ---------- Ajustes ---------- */
 function pgAjustes() {
-  const th = S.prefs?.theme || "auto";
-  return `<div class="h"><h2>Aparência</h2></div>${seg("tema", [{ v: "auto", l: "Noite musgo" }, { v: "light", l: "Papel" }], th).replace(/data-a="set" data-f="tema"/g, 'data-a="tema"')}
-   <div class="h"><h2>Categorias</h2><button class="aside" data-a="novaCat">+ nova</button></div>${S.cats.map(c => `<button class="ln" data-a="editCat" data-id="${c.id}" style="grid-template-columns:14px minmax(0,1fr) auto"><i style="width:10px;height:10px;border-radius:3px;background:${c.cor}"></i><span class="t">${esc(c.n)}</span><span class="s">${{ saida: "saída", entrada: "entrada", invest: "investimento" }[c.tipo]}</span></button>`).join("")}
-   <div class="h"><h2>Formas de pagamento</h2><button class="aside" data-a="novaConta">+ nova</button></div>${S.contas.filter(a => !a.pessoa).map(a => `<button class="ln" data-a="editConta" data-id="${a.id}" style="grid-template-columns:14px minmax(0,1fr) auto"><i style="width:10px;height:10px;border-radius:3px;background:${a.cor}"></i><span class="t">${esc(a.n)}</span><span class="s">${{ debito: "débito / pix", boleto: "boleto", credito: "crédito" + (a.venc ? ", vence dia " + a.venc : "") }[a.tipo]}</span></button>`).join("")}
-   ${window.Social?.available() ? `<div class="h"><h2>Amigos</h2></div>${FR.profile ? `<p class="lede">Seu @ é <b>@${esc(FR.profile.handle)}</b>. Quem souber seu @ pode te pedir amizade.</p>` : `<div class="acts" style="margin-top:0"><button class="secondary" data-a="meuHandle">Criar meu @</button></div>`}` : ""}
+  const th = S.prefs?.theme || "auto", nPed = FR.friends.filter(f => f.status === "pending" && !f.mine).length;
+  const tabs = `<div class="tools"><div class="seg">${[["sistema", "Sistema"], ["cadastros", "Cadastros"], ["social", "Social" + (nPed ? " · " + nPed : "")]].map(([k, t]) => `<button data-a="ajTab" data-v="${k}" aria-pressed="${ajTab === k}">${t}</button>`).join("")}</div></div>`;
+  if (ajTab === "cadastros") return tabs + ajCadastros();
+  if (ajTab === "social") return tabs + ajSocial();
+  return tabs + `<div class="h"><h2>Aparência</h2></div>${seg("tema", [{ v: "auto", l: "Noite musgo" }, { v: "light", l: "Papel" }], th).replace(/data-a="set" data-f="tema"/g, 'data-a="tema"')}
    <div class="h"><h2>Ao abrir o Fluo</h2></div>${(() => { const em = Store.user?.email || "", m = Store.remembered ? "direto" : Store.bioEnabled(em) ? "bio" : "senha"; return `<div class="seg">${[["direto", "Entrar direto"], ...(bioOk ? [["bio", "Biometria"]] : []), ["senha", "Pedir a senha"]].map(([v, l]) => `<button data-a="openMode" data-v="${v}" aria-pressed="${m === v}">${l}</button>`).join("")}</div>`; })()}
    <div class="h"><h2>Avisos</h2></div><div class="acts" style="margin-top:12px"><button class="secondary" data-a="avisosOn">Ativar notificações do aparelho</button></div>
    <div class="h"><h2>Conta</h2></div><p class="lede">${esc(Store.user?.email || "")}</p>
    <div class="acts"><button class="secondary" data-a="chPw">Trocar senha</button><button class="secondary" data-a="backup">Baixar backup</button><button class="secondary" data-a="importar">Restaurar backup</button><button class="secondary" data-a="sobre">Sobre e contato</button><button class="secondary" data-a="sair">Sair</button><button class="danger" data-a="apagar">Apagar tudo</button></div>`;
+}
+function ajCadastros() {
+  return `<div class="h"><h2>Categorias</h2><button class="aside" data-a="novaCat">+ nova</button></div>${S.cats.map(c => `<button class="ln" data-a="editCat" data-id="${c.id}" style="grid-template-columns:14px minmax(0,1fr) auto"><i style="width:10px;height:10px;border-radius:3px;background:${c.cor}"></i><span class="t">${esc(c.n)}</span><span class="s">${{ saida: "saída", entrada: "entrada", invest: "investimento" }[c.tipo]}</span></button>`).join("")}
+   <div class="h"><h2>Formas de pagamento</h2><button class="aside" data-a="novaConta">+ nova</button></div>${S.contas.filter(a => !a.pessoa).map(a => `<button class="ln" data-a="editConta" data-id="${a.id}" style="grid-template-columns:14px minmax(0,1fr) auto"><i style="width:10px;height:10px;border-radius:3px;background:${a.cor}"></i><span class="t">${esc(a.n)}</span><span class="s">${{ debito: "débito / pix", boleto: "boleto", credito: "crédito" + (a.venc ? ", vence dia " + a.venc : "") }[a.tipo]}</span></button>`).join("")}`;
+}
+function ajSocial() {
+  if (!window.Social?.available()) return `<p class="empty">Indisponível.</p>`;
+  const me = FR.profile, pend = FR.friends.filter(f => f.status === "pending"), amigos = FR.friends.filter(f => f.status === "accepted");
+  return `<div class="h"><h2>Meu @</h2></div>
+   ${me ? `<div class="me"><span class="me-h">@${esc(me.handle)}</span><span class="me-b"><button class="secondary" data-a="copiarHandle">Copiar</button><button class="secondary" data-a="meuHandle">Mudar</button></span></div><p class="note">Quem souber seu @ pode te pedir amizade.</p>` : `<p class="empty">${FR.err ? "Não consegui criar seu @ agora. Tente de novo mais tarde." : "Criando seu @…"}</p>`}
+   <div class="h"><h2>Adicionar amigo</h2></div>
+   <div class="addf"><input class="in" id="addH" placeholder="@usuario" autocapitalize="none" autocomplete="off" spellcheck="false" aria-label="@ do amigo"><button class="primary" data-a="amigoEnviar">Enviar pedido</button></div>
+   ${pend.length ? `<div class="h"><h2>Pedidos</h2></div>${pedidosHtml()}` : ""}
+   <div class="h"><h2>Amigos</h2><span class="aside">${amigos.length}</span></div>
+   ${amigos.map(f => { const p = S.pessoas.find(x => x.amigo?.uid === f.uid), cor = p?.cor || "#8f7aa8"; return `<div class="ln person" style="grid-template-columns:38px minmax(0,1fr) auto"><span class="av" style="--c:${cor};color:${readableOn(cor)}">${esc(f.handle[0].toUpperCase())}</span><span><span class="t" style="display:block">@${esc(f.handle)}</span><span class="s" style="display:block">amigo</span></span><button class="chip" data-a="amigoRem" data-uid="${f.uid}">Desfazer</button></div>`; }).join("") || `<p class="empty">Nenhum ainda.</p>`}`;
 }
 function catForm(id) {
   const c = id ? cat(id) : null;
@@ -520,6 +535,7 @@ async function refreshSocial() {
   if (!S || !window.Social?.available()) return; FR.last = Date.now();
   try {
     FR.profile = await Social.profile();
+    if (!FR.profile && !FR.autoTried) { FR.autoTried = true; await autoHandle(); }
     if (FR.profile) { FR.friends = await Social.friends(); linkFriends(); FR.inbox = S.keys ? await Social.inbox(S.keys, FR.friends) : []; await pushShares(); }
     const sig = JSON.stringify([FR.profile?.handle, FR.friends.map(f => [f.id, f.status]), FR.inbox.map(s => [s.sid, s.v, s.ini, s.n, s.fim, s.d])]);
     softRender(sig);
@@ -530,6 +546,21 @@ function softRender(sig, tries = 0) {
   if (sig === FR.sig) return;
   if ($("#sheet").hidden && !document.activeElement?.matches?.("input")) { FR.sig = sig; render(false); }
   else if (tries < 12) setTimeout(() => softRender(sig, tries + 1), 700);
+}
+/* cria o @ sozinho a partir do e-mail (parte antes do @, só a-z 0-9 _); se já existir, junta números. A pessoa pode mudar depois em Ajustes → Social. */
+async function autoHandle() {
+  let base = (Store.user?.email || "").split("@")[0].toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9_]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 16);
+  if (base.length < 3) base = (base + "usuario").slice(0, 16);
+  try {
+    if (!S.keys) S.keys = await Social.newKeys();
+    Store.save(S); await Store.flush(); // a chave privada precisa estar no cofre ANTES de publicar a pública
+    for (let i = 0; i < 6; i++) {
+      const h = i === 0 ? base : (base + (100 + Math.floor(Math.random() * 9000))).slice(0, 20), r = await Social.setHandle(h, S.keys.pub);
+      if (r.status === "ok") { FR.profile = { handle: r.handle, pub: S.keys.pub }; toast("Seu @ é @" + r.handle + ". Dá para mudar em Ajustes → Social."); return; }
+      if (r.status !== "taken") break;
+    }
+    FR.err = true;
+  } catch (e) { FR.err = true; }
 }
 /* cada amigo aceito vira uma "pessoa" (com @) para usar em Dividir com */
 function linkFriends() {
@@ -567,30 +598,17 @@ function pedidosHtml() {
     : `<div class="ln" style="grid-template-columns:minmax(0,1fr) auto"><span><span class="t" style="display:block">@${esc(f.handle)}</span><span class="s" style="display:block">quer ser seu amigo</span></span><span style="display:flex;gap:8px"><button class="chip" data-a="amigoResp" data-id="${f.id}" data-ok="1">Aceitar</button><button class="chip" data-a="amigoResp" data-id="${f.id}">Recusar</button></span></div>`).join("");
 }
 function handleForm() {
-  form("Escolha seu @", { h: "", err: "" }, f => `${fld("Seu @", `<input class="in" data-f="h" value="${esc(f.h)}" placeholder="ex.: ana_souza" autocapitalize="none" autocomplete="off" spellcheck="false" autofocus>`)}${f.err ? `<div class="err">${esc(f.err)}</div>` : ""}<div class="acts"><button class="primary" data-a="save">Criar meu @</button><button class="secondary" data-a="x">Cancelar</button></div>`);
+  form("Mudar meu @", { h: FR.profile?.handle || "", err: "" }, f => `${fld("Seu @", `<input class="in" data-f="h" value="${esc(f.h)}" placeholder="ex.: ana_souza" autocapitalize="none" autocomplete="off" spellcheck="false" autofocus>`)}${f.err ? `<div class="err">${esc(f.err)}</div>` : ""}<div class="acts"><button class="primary" data-a="save">Salvar</button><button class="secondary" data-a="x">Cancelar</button></div>`);
   FS.save = async () => {
     const h = FS.h.trim().replace(/^@/, "").toLowerCase();
     if (!/^[a-z0-9_]{3,20}$/.test(h)) { FS.err = "Use de 3 a 20 letras minúsculas, números ou _"; return FS.draw(); }
     try {
-      if (!S.keys) S.keys = await Social.newKeys();
-      Store.save(S); await Store.flush(); // a chave privada precisa estar guardada no cofre ANTES de publicar a pública
+      if (!S.keys) { S.keys = await Social.newKeys(); Store.save(S); await Store.flush(); }
       const r = await Social.setHandle(h, S.keys.pub);
       if (r.status === "taken") { FS.err = "Esse @ já está em uso."; return FS.draw(); }
-      if (r.status !== "ok") { FS.err = "Não foi possível criar o @."; return FS.draw(); }
-      FR.profile = { handle: r.handle, pub: S.keys.pub }; closeSheet(); toast("Seu @ é @" + r.handle); setTimeout(amigoForm, 450);
-    } catch (e) { FS.err = "Sem conexão com o servidor de amigos. Tente de novo."; FS.draw(); }
-  };
-}
-function amigoForm() {
-  if (!FR.profile) return handleForm();
-  form("Adicionar amigo", { h: "", err: "" }, f => `${fld("@ do amigo", `<input class="in" data-f="h" value="${esc(f.h)}" placeholder="@usuario" autocapitalize="none" autocomplete="off" spellcheck="false" autofocus>`)}${f.err ? `<div class="err">${esc(f.err)}</div>` : ""}<div class="acts"><button class="primary" data-a="save">Enviar pedido</button><button class="secondary" data-a="x">Cancelar</button></div>`);
-  FS.save = async () => {
-    const h = FS.h.trim().replace(/^@/, "").toLowerCase(); if (h.length < 3) { FS.err = "Digite o @ do amigo."; return FS.draw(); }
-    try {
-      const r = await Social.request(h), msg = { sent: "Pedido enviado para @" + h, accepted: "Vocês agora são amigos", pending: "Você já enviou um pedido para @" + h, exists: "Vocês já são amigos" }[r.status];
-      if (msg) { closeSheet(); toast(msg); refreshSocial(); return; }
-      FS.err = { unknown: "Não achei esse @.", self: "Esse é o seu próprio @.", limit: "Você tem pedidos pendentes demais.", noprofile: "Crie seu @ primeiro." }[r.status] || "Não foi possível enviar."; FS.draw();
-    } catch (e) { FS.err = "Sem conexão com o servidor de amigos."; FS.draw(); }
+      if (r.status !== "ok") { FS.err = "Não foi possível salvar o @."; return FS.draw(); }
+      FR.profile = { handle: r.handle, pub: S.keys.pub }; closeSheet(); toast("Seu @ agora é @" + r.handle); render(false);
+    } catch (e) { FS.err = "Sem conexão com o servidor. Tente de novo."; FS.draw(); }
   };
 }
 if (location.hostname === "localhost") window.__fluo = { get S() { return S; }, FR, refreshSocial, pushShares }; // só para testes locais
@@ -610,7 +628,17 @@ const A = {
   rachTog: d => { const i = FS.rach.findIndex(r => r.p === d.p); if (i >= 0) FS.rach.splice(i, 1); else FS.rach.push({ p: d.p, m: "igual" }); FS.draw(); },
   rachMode: d => { const r = FS.rach.find(x => x.p === d.p); if (r) r.m = d.m; FS.draw(); },
   recebido: d => { (S.pagos[cur] ??= {}); const k = "rach:" + d.id; S.pagos[cur][k] = !S.pagos[cur][k]; Store.save(S); const open = !$("#sheet").hidden; render(false); if (open) pessoaSheet(d.id); toast(S.pagos[cur][k] ? "Recebido ✓" : "Reaberto"); },
-  novoAmigo: () => amigoForm(), meuHandle: () => handleForm(),
+  meuHandle: () => handleForm(),
+  ajTab: d => { ajTab = d.v; render(false); if (d.v === "social" && Date.now() - FR.last > 15000) refreshSocial(); },
+  copiarHandle: () => { navigator.clipboard?.writeText("@" + FR.profile.handle).then(() => toast("@ copiado"), () => toast("Não foi possível copiar")); },
+  amigoEnviar: async () => {
+    const el = $("#addH"), h = (el?.value || "").trim().replace(/^@/, "").toLowerCase(); if (h.length < 3) return toast("Digite o @ do amigo");
+    try {
+      const r = await Social.request(h), ok = { sent: "Pedido enviado para @" + h, accepted: "Vocês agora são amigos", pending: "Você já enviou um pedido para @" + h, exists: "Vocês já são amigos" }[r.status];
+      toast(ok || { unknown: "Não achei esse @", self: "Esse é o seu próprio @", limit: "Você tem pedidos pendentes demais", noprofile: "Seu @ ainda não foi criado" }[r.status] || "Não foi possível enviar");
+      if (ok && el) el.value = ""; refreshSocial();
+    } catch (e) { toast("Sem conexão com o servidor de amigos"); }
+  },
   amigoResp: async d => { try { await Social.respond(d.id, !!d.ok); toast(d.ok ? "Amigo adicionado" : "Pedido recusado"); } catch (e) { toast("Não foi possível responder."); } refreshSocial(); },
   amigoDel: async d => { try { await Social.remove(d.id); } catch (e) {} refreshSocial(); },
   amigoRem: d => { confirmFn = async () => { const f = FR.friends.find(x => x.uid === d.uid); if (!f) return; try { await Social.remove(f.id); toast("Amizade desfeita"); } catch (e) { toast("Não foi possível desfazer."); } refreshSocial(); }; openSheet(`<h3>Desfazer amizade?</h3><p class="lede">As divisões compartilhadas entre vocês deixam de aparecer para os dois.</p><div class="acts"><button class="primary" data-a="confirmYes" style="background:var(--neg)">Desfazer amizade</button><button class="secondary" data-a="x">Cancelar</button></div>`); },
@@ -649,7 +677,7 @@ document.addEventListener("input", e => {
   if (t.dataset.f === "fecha" || t.dataset.f === "venc") { const fe = $('#fb [data-f="fecha"]'), ve = $('#fb [data-f="venc"]'), F = +FS.fecha, V = +FS.venc; if (fe && ve) { ve.placeholder = F && !V ? vencDeFecha(F) + " (calculado)" : "ex.: 10"; fe.placeholder = V && !F ? fechaDeVenc(V) + " (calculado)" : "ex.: 3"; } }
   if (["v", "n", "tot"].includes(t.dataset.f) && FS.rep === "parc") { const keep = t.selectionStart; FS.draw(); const nx = $(`#fb [data-f="${t.dataset.f}"]`); if (nx) { nx.focus(); try { nx.setSelectionRange(keep, keep); } catch (e) {} } }
 });
-addEventListener("keydown", e => { if (e.key === "Escape") closeSheet(); if (e.key === "Enter" && FS && e.target.matches("input") && e.target.dataset.f) { e.preventDefault(); FS.save(); } });
+addEventListener("keydown", e => { if (e.key === "Enter" && e.target.id === "addH") { e.preventDefault(); A.amigoEnviar(); } if (e.key === "Escape") closeSheet(); if (e.key === "Enter" && FS && e.target.matches("input") && e.target.dataset.f) { e.preventDefault(); FS.save(); } });
 
 /* ---------- shell ---------- */
 const PAGES = [["inicio", "Início", pgInicio], ["pagar", "Pagar", pgPagar], ["extrato", "Extrato", pgExtrato], ["carteira", "Carteira", pgCarteira], ["plano", "Compromissos", pgPlano], ["futuro", "Futuro", pgFuturo], ["ajustes", "Ajustes", pgAjustes]];
@@ -682,7 +710,7 @@ function tween(oldNums, oldBars, anim) {
 function render(anim = true) {
   const p = PAGES.find(x => x[0] === page) || PAGES[0], v = $("#view"), y = scrollY, same = lastPage === page;
   const oldNums = same ? numEls(v).map(parseMoney) : [], oldBars = BARS.map(([sel, prop]) => same ? [...v.querySelectorAll(sel)].map(e => e.style[prop]) : []), tlOld = v.querySelector(".tl")?.scrollLeft;
-  $("#nav").innerHTML = PAGES.map(([k, t]) => `<button data-a="nav" data-p="${k}" ${k === page ? 'aria-current="page"' : ""}><span>${t}</span></button>`).join("");
+  $("#nav").innerHTML = PAGES.map(([k, t]) => `<button data-a="nav" data-p="${k}" ${k === page ? 'aria-current="page"' : ""}><span>${t}${k === "ajustes" && FR.friends.some(f => f.status === "pending" && !f.mine) ? '<i class="dot"></i>' : ""}</span></button>`).join("");
   $("#dock").innerHTML = `<button data-a="nav" data-p="inicio" ${page === "inicio" ? 'aria-current="page"' : ""}>Início</button><button data-a="nav" data-p="pagar" ${page === "pagar" ? 'aria-current="page"' : ""}>Pagar</button><button class="plus" id="dockAdd" aria-label="Lançar" data-a="lancar">+</button><button data-a="nav" data-p="extrato" ${page === "extrato" ? 'aria-current="page"' : ""}>Extrato</button><button data-a="mais" ${["carteira", "plano", "futuro", "ajustes"].includes(page) ? 'aria-current="page"' : ""}>Mais</button>`;
   $("#mlabel").textContent = label(cur); $("#mlabel").title = cur === NOW ? "Mês atual" : "Voltar para o mês atual"; $("#today").hidden = cur === NOW;
   const keepAnim = anim && !same;
@@ -724,7 +752,7 @@ function enter(state) {
   clearInterval(window.__lgT); S = state; S.pagos ??= {}; S.metas ??= []; S.eventos ??= []; S.prefs ??= { theme: "auto", priv: false };
   $("#auth").hidden = true; $("#app").hidden = false; $("#dock").hidden = false;
   $("#who").textContent = Store.user?.email || ""; Store.bioSupported().then(v => { bioOk = v; if (page === "ajustes") render(false); }); applyTheme(); render(true); setTimeout(pushNotices, 1500);
-  FR.profile = null; FR.friends = []; FR.inbox = []; FR.sig = ""; setTimeout(refreshSocial, 900);
+  FR.profile = null; FR.friends = []; FR.inbox = []; FR.sig = ""; FR.autoTried = false; FR.err = false; setTimeout(refreshSocial, 900);
   if (!window.__frT) window.__frT = setInterval(() => { if (document.visibilityState === "visible" && S && Date.now() - FR.last > 80000) refreshSocial(); }, 30000);
 }
 
