@@ -37,14 +37,16 @@ const dstr = (ym, d) => { const [y, m] = ym.split("-").map(Number), last = new D
 const fd = s => s.slice(8) + "/" + s.slice(5, 7);
 const daysBetween = (a, b) => Math.round((new Date(b + "T12:00:00") - new Date(a + "T12:00:00")) / 864e5);
 const startM = p => p.fat || p.data.slice(0, 7);
-const cardFecha = a => a.fecha || (((a.venc || 10) - 7 + 29) % 30) + 1; // sem o dia informado, estima 7 dias antes do vencimento
+const fechaDeVenc = V => ((V - 7 + 29) % 30) + 1, vencDeFecha = F => ((F + 6) % 30) + 1; // o outro dia é estimado: fecha 7 dias antes de vencer
+const cardVenc = a => a.venc || (a.fecha ? vencDeFecha(a.fecha) : 10);
+const cardFecha = a => a.fecha || fechaDeVenc(cardVenc(a));
 /* compra feita a partir do dia de fechamento entra na PRÓXIMA fatura; o melhor dia de compra é o próprio dia de fechamento */
 function cardCycle(a, date) {
-  const fecha = cardFecha(a), venc = a.venc || 10, ym = date.slice(0, 7), d = +date.slice(8);
+  const fecha = cardFecha(a), venc = cardVenc(a), ym = date.slice(0, 7), d = +date.slice(8);
   const closeM = d >= fecha ? addM(ym, 1) : ym, closeDate = dstr(closeM, fecha);
   const dueM = venc > fecha ? closeM : addM(closeM, 1), dueDate = dstr(dueM, venc);
   const antes = d < fecha, bestDate = dstr(ym, fecha), bestDue = dstr(venc > fecha ? addM(ym, 1) : addM(ym, 2), venc);
-  return { fecha, venc, estimado: !a.fecha, fatM: dueM, closeDate, dueDate, dias: daysBetween(date, dueDate), antes, bestDate, bestDue, ganho: daysBetween(dueDate, bestDue) };
+  return { fecha, venc, estimado: !a.fecha || !a.venc, fatM: dueM, closeDate, dueDate, dias: daysBetween(date, dueDate), antes, bestDate, bestDue, ganho: daysBetween(dueDate, bestDue) };
 }
 const creditCycle = (contaId, tipo, date) => { const a = conta(contaId); return tipo === "saida" && a.tipo === "credito" && date ? cardCycle(a, date) : null; };
 const startFor = f => creditCycle(f.conta, f.tipo, f.data)?.fatM || f.data.slice(0, 7);
@@ -64,7 +66,7 @@ function notices() {
     const fecha = cardFecha(a), next = dstr(hoje <= fecha ? tm : addM(tm, 1), fecha), n = daysBetween(t, next), due = cardCycle(a, next).dueDate;
     if (n === 0) out.push({ id: "best:" + a.id, tone: "best", title: `Hoje é o melhor dia de compra no ${a.n}`, body: `Compras de hoje vencem só em ${fd(due)}` });
     else if (n <= 3) out.push({ id: "best:" + a.id, tone: "best", title: `Melhor dia no ${a.n}: ${n === 1 ? "amanhã" : "em " + n + " dias"} (${fd(next)})`, body: `Comprando nesse dia, vence só em ${fd(due)}` });
-    [tm, addM(tm, 1)].forEach(m => { const v = calc(m).porConta[a.id]; if (!v || S.pagos[m]?.["card:" + a.id]) return; const dd = dstr(m, a.venc || 10), k = daysBetween(t, dd);
+    [tm, addM(tm, 1)].forEach(m => { const v = calc(m).porConta[a.id]; if (!v || S.pagos[m]?.["card:" + a.id]) return; const dd = dstr(m, cardVenc(a)), k = daysBetween(t, dd);
       if (k < 0) out.push({ id: "due:" + a.id + m, tone: "late", title: `Fatura ${a.n} atrasada (${fd(dd)})`, body: brl(v) });
       else if (k <= 3) out.push({ id: "due:" + a.id + m, tone: "due", title: `Fatura ${a.n} vence ${k === 0 ? "hoje" : k === 1 ? "amanhã" : "em " + k + " dias"} (${fd(dd)})`, body: brl(v) }); });
   });
@@ -106,7 +108,7 @@ function calc(k) {
 }
 function contasDoMes(k) {
   const c = calc(k), out = [];
-  S.contas.filter(a => a.tipo === "credito" || a.pessoa).forEach(a => { const v = c.porConta[a.id]; if (v) out.push({ key: "card:" + a.id, fat: a.id, n: a.pessoa ? pessoa(a.pessoa).n : "Fatura " + a.n, sub: a.pessoa ? "o que você usou do cartão dela" : "cartão de crédito", dia: a.venc || 1, v }); });
+  S.contas.filter(a => a.tipo === "credito" || a.pessoa).forEach(a => { const v = c.porConta[a.id]; if (v) out.push({ key: "card:" + a.id, fat: a.id, n: a.pessoa ? pessoa(a.pessoa).n : "Fatura " + a.n, sub: a.pessoa ? "o que você usou do cartão dela" : "cartão de crédito", dia: cardVenc(a), v }); });
   c.it.filter(x => x.tipo === "saida" && x.src === "rec" && conta(x.conta).tipo !== "credito" && !conta(x.conta).pessoa).forEach(x => out.push({ key: x.id, n: x.d, sub: cat(x.cat).n + " · " + conta(x.conta).n, dia: x.dia, v: x.v }));
   out.forEach(o => o.paid = !!S.pagos[k]?.[o.key]);
   return out.sort((a, b) => a.paid - b.paid || a.dia - b.dia);
@@ -144,7 +146,17 @@ function form(title, st, body, { pre = "", sub = "" } = {}) {
 const chips = (f, opts, val) => `<div class="chips">${opts.map(o => `<button type="button" class="chip" data-a="set" data-f="${f}" data-val="${esc(o.v)}" aria-pressed="${String(val) === String(o.v)}">${o.c ? `<i style="--c:${o.c}"></i>` : ""}${esc(o.l)}</button>`).join("")}</div>`;
 const seg = (f, opts, val) => `<div class="seg">${opts.map(o => `<button type="button" data-a="set" data-f="${f}" data-val="${esc(o.v)}" aria-pressed="${String(val) === String(o.v)}">${esc(o.l)}</button>`).join("")}</div>`;
 const fld = (l, inner) => `<div class="fld"><span class="lb">${l}</span>${inner}</div>`;
-const colorChips = (f, val) => chips(f, PAL.map(c => ({ v: c, l: "", c })), val).replace(/class="chip"/g, 'class="chip" style="padding:6px 10px"');
+/* seletor de cor próprio (nunca o nativo): paleta + "Outra cor" com área saturação/brilho, faixa de matiz e código */
+const hsvToHex = (h, s, v) => { const f = n => { const k = (n + h / 60) % 6, c = v - v * s * Math.max(0, Math.min(k, 4 - k, 1)); return Math.round(c * 255).toString(16).padStart(2, "0"); }; return "#" + f(5) + f(3) + f(1); };
+const hexToHsv = hex => { const m = /^#?([0-9a-f]{6})$/i.exec(hex || ""), n = parseInt(m ? m[1] : "6b7389", 16), r = (n >> 16) / 255, g = (n >> 8 & 255) / 255, b = (n & 255) / 255, mx = Math.max(r, g, b), d = mx - Math.min(r, g, b); let h = 0; if (d) h = mx === r ? ((g - b) / d + 6) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4; return [h * 60, mx ? d / mx : 0, mx]; };
+const readableOn = hex => { const m = /^#?([0-9a-f]{6})$/i.exec(hex || ""); if (!m) return "#fff"; const n = parseInt(m[1], 16), lin = c => { c /= 255; return c <= .03928 ? c / 12.92 : Math.pow((c + .055) / 1.055, 2.4); }; return .2126 * lin(n >> 16) + .7152 * lin(n >> 8 & 255) + .0722 * lin(n & 255) > .45 ? "#16171a" : "#fff"; };
+const cpHtml = val => { const { h, s, v } = FS.cp; return `<div class="cp"><div class="cp-sv" style="--hue:${h}"><i style="left:${s * 100}%;top:${(1 - v) * 100}%"></i></div><div class="cp-h"><i style="left:${h / 360 * 100}%"></i></div><div class="cp-row"><span class="cp-sw" style="background:${esc(val)}"></span><input class="in cp-hex" value="${esc(val)}" maxlength="7" spellcheck="false" autocomplete="off" aria-label="Código da cor"></div></div>`; };
+const colorChips = (f, val) => {
+  const open = FS?.cp?.f === f, custom = !PAL.includes(val);
+  const base = chips(f, PAL.map(c => ({ v: c, l: "", c })), val).replace(/class="chip"/g, 'class="chip" style="padding:6px 10px"');
+  const btn = `<button type="button" class="chip" data-a="cpToggle" data-f="${f}" aria-pressed="${custom || open}">${custom ? `<i style="--c:${esc(val)}"></i>` : ""}Outra cor</button>`;
+  return base.replace(/<\/div>$/, btn + "</div>") + (open ? cpHtml(val) : "");
+};
 
 /* ---------- Início ---------- */
 function pgInicio() {
@@ -217,9 +229,9 @@ function pgExtrato() {
 /* ---------- Carteira: cartões, contas e pessoas ---------- */
 function pgCarteira() {
   const c = calc(cur), cards = S.contas.filter(a => a.tipo === "credito" && !a.pessoa), others = S.contas.filter(a => a.tipo !== "credito" && !a.pessoa);
-  const card = a => { const v = c.porConta[a.id] || 0, paid = !!S.pagos[cur]?.["card:" + a.id]; return `<button class="card ${paid && v ? "paid" : ""}" style="--c:${a.cor}" data-a="conta" data-id="${a.id}"><div><div class="k">${paid && v ? "fatura paga" : "vence dia " + (a.venc || "?")}</div><div class="n">${esc(a.n)}</div></div><div><div class="v money num">${brl(v)}</div>${a.limite ? `<div class="lim"><i style="width:${Math.min(100, v / a.limite * 100)}%"></i></div><div class="k" style="margin-top:6px">${Math.round(v / a.limite * 100)}% do limite</div>` : ""}</div></button>`; };
+  const card = a => { const v = c.porConta[a.id] || 0, paid = !!S.pagos[cur]?.["card:" + a.id]; return `<button class="card ${paid && v ? "paid" : ""}" style="--c:${a.cor};color:${readableOn(a.cor)}" data-a="conta" data-id="${a.id}"><div><div class="k">${paid && v ? "fatura paga" : "vence dia " + (a.venc || (a.fecha ? vencDeFecha(a.fecha) : "?"))}</div><div class="n">${esc(a.n)}</div></div><div><div class="v money num">${brl(v)}</div>${a.limite ? `<div class="lim"><i style="width:${Math.min(100, v / a.limite * 100)}%"></i></div><div class="k" style="margin-top:6px">${Math.round(v / a.limite * 100)}% do limite</div>` : ""}</div></button>`; };
   const pr = p => { const du = autoDebt(p) + S.dividas.filter(d => d.pessoa === p.id && d.dir === "devo").reduce((t, d) => t + Math.max(0, restante(d)), 0), re = S.dividas.filter(d => d.pessoa === p.id && d.dir === "me_deve").reduce((t, d) => t + Math.max(0, restante(d)), 0), net = re - du;
-    return `<button class="ln person" data-a="pessoa" data-id="${p.id}"><span class="av" style="--c:${p.cor}">${esc(p.n[0] || "?")}</span><span><span class="t" style="display:block">${esc(p.n)}</span><span class="s" style="display:block">${net === 0 ? "sem pendências" : net > 0 ? "te deve" : "você deve"}</span></span><span class="v ${net > 0 ? "pos" : net < 0 ? "neg" : ""}">${net === 0 ? "—" : M(Math.abs(net))}</span></button>`; };
+    return `<button class="ln person" data-a="pessoa" data-id="${p.id}"><span class="av" style="--c:${p.cor};color:${readableOn(p.cor)}">${esc(p.n[0] || "?")}</span><span><span class="t" style="display:block">${esc(p.n)}</span><span class="s" style="display:block">${net === 0 ? "sem pendências" : net > 0 ? "te deve" : "você deve"}</span></span><span class="v ${net > 0 ? "pos" : net < 0 ? "neg" : ""}">${net === 0 ? "—" : M(Math.abs(net))}</span></button>`; };
   return `<div class="h"><h2>Cartões de crédito</h2><button class="aside" data-a="novaConta">+ novo cartão</button></div>
    ${cards.length ? `<div class="wallet">${cards.map(card).join("")}</div>` : `<p class="empty">Nenhum.</p>`}
    <div class="h"><h2>Débito, boletos e outros</h2></div>${others.map(a => `<button class="ln" data-a="editConta" data-id="${a.id}" style="grid-template-columns:minmax(0,1fr) auto"><span class="t">${esc(a.n)}</span><span class="v">${M(c.porConta[a.id] || 0)}</span></button>`).join("")}
@@ -372,7 +384,7 @@ function catForm(id) {
 function contaForm(id) {
   const a = id ? conta(id) : null;
   form(a ? "Editar forma de pagamento" : "Nova forma de pagamento", { n: a?.n || "", tipo: a?.tipo || "credito", venc: a?.venc || "", fecha: a?.fecha || "", limite: a?.limite ? fnum(a.limite) : "", cor: a?.cor || PAL[2] }, f => `${fld("Nome", `<input class="in" data-f="n" value="${esc(f.n)}" placeholder="ex.: Nubank" autofocus>`)}${fld("Tipo", seg("tipo", [{ v: "credito", l: "Cartão de crédito" }, { v: "debito", l: "Débito / Pix" }, { v: "boleto", l: "Boleto" }], f.tipo))}
-    ${f.tipo === "credito" ? `<div class="row2">${fld("Fecha dia", `<input class="in" data-f="fecha" value="${esc(f.fecha)}" inputmode="numeric" placeholder="ex.: 3">`)}${fld("Vence dia", `<input class="in" data-f="venc" value="${esc(f.venc)}" inputmode="numeric" placeholder="ex.: 10">`)}</div>${fld("Limite", `<input class="in" data-f="limite" value="${esc(f.limite)}" inputmode="decimal">`)}` : ""}${fld("Cor", colorChips("cor", f.cor))}
+    ${f.tipo === "credito" ? `<div class="row2">${fld("Fecha dia", `<input class="in" data-f="fecha" value="${esc(f.fecha)}" inputmode="numeric" placeholder="${+f.venc && !+f.fecha ? fechaDeVenc(+f.venc) + " (calculado)" : "ex.: 3"}">`)}${fld("Vence dia", `<input class="in" data-f="venc" value="${esc(f.venc)}" inputmode="numeric" placeholder="${+f.fecha && !+f.venc ? vencDeFecha(+f.fecha) + " (calculado)" : "ex.: 10"}">`)}</div>${fld("Limite", `<input class="in" data-f="limite" value="${esc(f.limite)}" inputmode="decimal">`)}` : ""}${fld("Cor", colorChips("cor", f.cor))}
     <div class="acts"><button class="primary" data-a="save">Salvar</button>${a ? `<button class="danger" data-a="del">Excluir</button>` : ""}</div>`);
   FS.save = () => { if (!FS.n.trim()) return; const s0 = snap(), o = { n: FS.n.trim(), tipo: FS.tipo, cor: FS.cor, venc: FS.tipo === "credito" ? (+FS.venc || undefined) : undefined, fecha: FS.tipo === "credito" ? (+FS.fecha || undefined) : undefined, limite: FS.tipo === "credito" ? (num(FS.limite) || undefined) : undefined }; if (a) Object.assign(a, o); else S.contas.push({ id: uid(), ...o }); closeSheet(); commit("Salvo", s0); };
   FS.del = () => { const s0 = snap(); S.contas = S.contas.filter(x => x.id !== id); closeSheet(); commit("Forma de pagamento excluída", s0); };
@@ -470,7 +482,8 @@ const A = {
   pagarDivida: d => { const dv = S.dividas.find(x => x.id === d.id), s0 = snap(); const v = d.part ? num($("#pg" + d.id)?.value) : restante(dv); if (!v) return; (dv.pagtos ??= []).push({ v: Math.min(v, restante(dv)), data: today() }); Store.save(S); render(false); pessoaSheet(dv.pessoa); toast("Pagamento registrado", s0); },
   delDivida: d => { const dv = S.dividas.find(x => x.id === d.id), s0 = snap(); S.dividas = S.dividas.filter(x => x !== dv); Store.save(S); render(false); pessoaSheet(dv.pessoa); toast("Dívida apagada", s0); },
   tema: d => { S.prefs.theme = d.val; applyTheme(); commit(); },
-  set: d => { const v = d.val === "true" ? true : d.val === "false" ? false : d.val; FS[d.f] = v; FS.onSet?.(d.f); FS.draw(); },
+  cpToggle: d => { if (FS.cp?.f === d.f) FS.cp = null; else { const [h, s, v] = hexToHsv(FS[d.f]); FS.cp = { f: d.f, h, s, v }; } FS.draw(); },
+  set: d => { const v = d.val === "true" ? true : d.val === "false" ? false : d.val; FS[d.f] = v; if (FS.cp && FS.cp.f === d.f && /^#/.test(v)) { const [h, s, vv] = hexToHsv(v); Object.assign(FS.cp, { h, s, v: vv }); } FS.onSet?.(d.f); FS.draw(); },
   calm: d => { FS.calM = addM(FS.calM, +d.n); FS.calDir = +d.n > 0 ? "r" : "l"; FS.draw(); FS.calDir = null; },
   calToday: () => { FS.data = today(); FS.calM = today().slice(0, 7); FS.cal = false; FS.draw(); },
   save: () => FS?.save(), del: () => FS?.del(), stop: () => FS?.stop(), x: () => closeSheet(),
@@ -480,9 +493,27 @@ const A = {
   irPara: d => { closeSheet(); page = d.p; render(true); },
 };
 document.addEventListener("click", e => { const b = e.target.closest("[data-a]"); if (b && A[b.dataset.a]) { e.preventDefault(); A[b.dataset.a](b.dataset, b); } const x = e.target.closest("[data-x]"); if (x) closeSheet(); });
+let cpDrag = null;
+const clamp01 = x => Math.max(0, Math.min(1, x));
+function cpPaint(box, hex) {
+  const cp = FS.cp, sv = box.querySelector(".cp-sv"), hh = box.querySelector(".cp-h i"), hx = box.querySelector(".cp-hex"); FS[cp.f] = hex;
+  sv.style.setProperty("--hue", cp.h); sv.firstElementChild.style.left = cp.s * 100 + "%"; sv.firstElementChild.style.top = (1 - cp.v) * 100 + "%"; hh.style.left = cp.h / 360 * 100 + "%";
+  box.querySelector(".cp-sw").style.background = hex; if (document.activeElement !== hx) hx.value = hex;
+}
+function cpMove(e) {
+  const r = cpDrag.getBoundingClientRect(), x = clamp01((e.clientX - r.left) / r.width), y = clamp01((e.clientY - r.top) / r.height), cp = FS.cp;
+  if (cpDrag.classList.contains("cp-sv")) { cp.s = x; cp.v = 1 - y; } else cp.h = x * 360;
+  cpPaint(cpDrag.closest(".cp"), hsvToHex(cp.h, cp.s, cp.v));
+}
+document.addEventListener("pointerdown", e => { const t = FS?.cp && e.target.closest(".cp-sv, .cp-h"); if (!t) return; cpDrag = t; try { t.setPointerCapture(e.pointerId); } catch (x) {} e.preventDefault(); cpMove(e); });
+document.addEventListener("pointermove", e => { if (cpDrag) cpMove(e); });
+document.addEventListener("pointerup", () => { if (cpDrag) { cpDrag = null; FS.draw(); } });
+document.addEventListener("change", e => { if (FS?.cp && e.target.classList?.contains("cp-hex")) FS.draw(); });
 document.addEventListener("input", e => {
-  const t = e.target; if (t.id === "busca") { busca = t.value; const p = t.selectionStart; render(false); const n = $("#busca"); n.focus(); n.setSelectionRange(p, p); return; }
+  const t = e.target;
+  if (FS?.cp && t.classList?.contains("cp-hex")) { let v = t.value.trim().replace(/^#?/, "#"); if (/^#[0-9a-f]{3}$/i.test(v)) v = "#" + [...v.slice(1)].map(c => c + c).join(""); if (/^#[0-9a-f]{6}$/i.test(v)) { const [h, s, vv] = hexToHsv(v); Object.assign(FS.cp, { h, s, v: vv }); cpPaint(t.closest(".cp"), v.toLowerCase()); } return; } if (t.id === "busca") { busca = t.value; const p = t.selectionStart; render(false); const n = $("#busca"); n.focus(); n.setSelectionRange(p, p); return; }
   if (!FS || !t.dataset.f) return; if (t.dataset.f === "smart") { FS.smart(t.value); return; } FS[t.dataset.f] = t.value;
+  if (t.dataset.f === "fecha" || t.dataset.f === "venc") { const fe = $('#fb [data-f="fecha"]'), ve = $('#fb [data-f="venc"]'), F = +FS.fecha, V = +FS.venc; if (fe && ve) { ve.placeholder = F && !V ? vencDeFecha(F) + " (calculado)" : "ex.: 10"; fe.placeholder = V && !F ? fechaDeVenc(V) + " (calculado)" : "ex.: 3"; } }
   if (["v", "n", "tot"].includes(t.dataset.f) && FS.rep === "parc") { const keep = t.selectionStart; FS.draw(); const nx = $(`#fb [data-f="${t.dataset.f}"]`); if (nx) { nx.focus(); try { nx.setSelectionRange(keep, keep); } catch (e) {} } }
 });
 addEventListener("keydown", e => { if (e.key === "Escape") closeSheet(); if (e.key === "Enter" && FS && e.target.matches("input") && e.target.dataset.f) { e.preventDefault(); FS.save(); } });
