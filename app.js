@@ -50,6 +50,13 @@ function cardCycle(a, date) {
 }
 const creditCycle = (contaId, tipo, date) => { const a = conta(contaId); return tipo === "saida" && a.tipo === "credito" && date ? cardCycle(a, date) : null; };
 const startFor = f => creditCycle(f.conta, f.tipo, f.data)?.fatM || f.data.slice(0, 7);
+function rachHtml(f) {
+  if (f.tipo !== "saida" || !S.pessoas.length) return "";
+  const n = Math.max(2, +f.n || 2), v = f.rep === "parc" && f.tot ? num(f.v) / n : num(f.v), sh = shares({ v, rach: f.rach }), on = id => f.rach.find(r => r.p === id);
+  const rows = f.rach.map((r, i) => `<div class="rx"><span class="t">${esc(pessoa(r.p).n)}</span><div class="seg"><button type="button" data-a="rachMode" data-p="${r.p}" data-m="igual" aria-pressed="${r.m !== "fixo"}">Parte igual</button><button type="button" data-a="rachMode" data-p="${r.p}" data-m="fixo" aria-pressed="${r.m === "fixo"}">Valor fixo</button></div>${r.m === "fixo" ? `<input class="in rx-v" data-rx="${r.p}" value="${esc(r.vs ?? (r.v ? fnum(r.v) : ""))}" inputmode="decimal" placeholder="0,00" aria-label="Valor de ${esc(pessoa(r.p).n)}">` : `<span class="rx-a money">${brl(sh.outros[i].v)}</span>`}</div>`).join("");
+  return fld("Dividir com", `<div class="chips">${S.pessoas.map(p => `<button type="button" class="chip" data-a="rachTog" data-p="${p.id}" aria-pressed="${!!on(p.id)}"><i style="--c:${p.cor}"></i>${esc(p.n)}</button>`).join("")}</div>${rows}${f.rach.length ? `<p class="note" id="rxsum">${rxSum(f, sh)}</p>` : ""}`);
+}
+const rxSum = (f, sh) => `Você paga <b>${brl(sh.meu)}</b>${f.rep === "parc" ? " por parcela" : f.rep === "mes" ? " por mês" : ""}${sh.meu < 0 ? " — os valores passam do total" : ""}`;
 function cardNote(f) {
   const c = creditCycle(f.conta, f.tipo, f.data); if (!c) return "";
   const n = Math.max(2, +f.n || 2);
@@ -83,11 +90,21 @@ function pushNotices() {
 }
 
 /* ---------- cálculo (igual ao app atual) ---------- */
+/* divisão: it.rach = [{p: idPessoa, m: "igual" | "fixo", v?: valor fixo por parcela/mês}]. "igual" divide o que sobra do fixo entre você e as pessoas "igual". */
+function shares(it) {
+  const r = it.rach || [], v = it.v;
+  if (!r.length) return { outros: [], meu: v };
+  const fixed = r.filter(x => x.m === "fixo").reduce((t, x) => t + (+x.v || 0), 0), eq = r.filter(x => x.m !== "fixo").length, each = Math.max(0, v - fixed) / (eq + 1);
+  const outros = r.map(x => ({ p: x.p, v: Math.round((x.m === "fixo" ? +x.v || 0 : each) * 100) / 100 })), meu = Math.round((v - outros.reduce((t, x) => t + x.v, 0)) * 100) / 100;
+  return { outros, meu };
+}
+const recPend = id => S.pagos[cur]?.["rach:" + id] ? 0 : (calc(cur).recPor[id] || []).reduce((s, x) => s + x.v, 0);
 function monthItems(k) {
   const out = [];
   S.recorrentes.forEach(r => { if (diffM(r.inicio, k) >= 0 && (!r.fim || diffM(k, r.fim) >= 0)) out.push({ ...r, src: "rec", dia: r.dia || 1 }); });
   S.parcelas.forEach(p => { const i = diffM(startM(p), k); if (i >= 0 && i < p.n && (!p.fim || diffM(k, p.fim) >= 0)) out.push({ ...p, tipo: "saida", src: "parc", idx: i + 1, dia: +p.data.slice(8) }); });
   S.avulsos.forEach(a => { if ((a.fat || a.data.slice(0, 7)) === k) out.push({ ...a, src: "avulso", dia: +a.data.slice(8) }); });
+  out.forEach(x => { const s = x.tipo === "saida" ? shares(x) : { outros: [], meu: x.v }; x.meu = s.meu; x.outros = s.outros; });
   return out.sort((a, b) => b.dia - a.dia);
 }
 const isPaid = (k, it) => {
@@ -99,12 +116,13 @@ const isPaid = (k, it) => {
 };
 const memo = {};
 function calc(k) {
-  const it = monthItems(k), sum = f => it.filter(f).reduce((t, x) => t + x.v, 0);
-  const ent = sum(x => x.tipo === "entrada"), inv = sum(x => x.tipo === "invest"), sai = sum(x => x.tipo === "saida");
-  const fixo = sum(x => x.tipo === "saida" && x.src === "rec"), parc = sum(x => x.src === "parc"), vari = sum(x => x.tipo === "saida" && x.src === "avulso");
-  const porCat = {}, porConta = {};
-  it.filter(x => x.tipo === "saida").forEach(x => { porCat[x.cat] = (porCat[x.cat] || 0) + x.v; porConta[x.conta] = (porConta[x.conta] || 0) + x.v; });
-  return { it, ent, inv, sai, fixo, parc, vari, saldo: ent - sai - inv, porCat, porConta };
+  const it = monthItems(k), sum = f => it.filter(f).reduce((t, x) => t + x.v, 0), sumM = f => it.filter(f).reduce((t, x) => t + (x.tipo === "saida" ? x.meu : x.v), 0);
+  const ent = sum(x => x.tipo === "entrada"), inv = sum(x => x.tipo === "invest"), sai = sumM(x => x.tipo === "saida");
+  const fixo = sumM(x => x.tipo === "saida" && x.src === "rec"), parc = sumM(x => x.src === "parc"), vari = sumM(x => x.tipo === "saida" && x.src === "avulso");
+  const porCat = {}, porConta = {}, recPor = {};
+  it.filter(x => x.tipo === "saida").forEach(x => { porCat[x.cat] = (porCat[x.cat] || 0) + x.meu; porConta[x.conta] = (porConta[x.conta] || 0) + x.v; x.outros.forEach(o => (recPor[o.p] ??= []).push({ it: x, v: o.v })); });
+  const recebe = Object.values(recPor).flat().reduce((t, x) => t + x.v, 0), recPend = Object.entries(recPor).reduce((t, [id, l]) => t + (S.pagos[k]?.["rach:" + id] ? 0 : l.reduce((s, x) => s + x.v, 0)), 0);
+  return { it, ent, inv, sai, fixo, parc, vari, saldo: ent - sai - inv, porCat, porConta, recPor, recebe, recPend };
 }
 function contasDoMes(k) {
   const c = calc(k), out = [];
@@ -181,13 +199,13 @@ function pgInicio() {
   for (let i = 1; i <= 14; i++) { const a = calc(addM(cur, i - 1)).parc, b = calc(addM(cur, i)).parc; if (b < a - 0.5) { hor = `Em <b>${label(addM(cur, i))}</b> suas parcelas caem de ${M(a)} para ${M(b)} — <span class="hl">${brl(a - b)} a menos por mês</span>.`; break; } }
   const rows = l.filter(x => !x.paid).slice(0, 5).map(payRow).join("");
   return `<section class="hero"><div><div class="kick">Saldo de ${label(cur)}</div><div class="big money num"><small>R$</small>${!PRIV && c.saldo < 0 ? "−" : ""}${nbr(c.saldo)}</div><p class="sent">${frase}</p></div>
-    <div class="facts"><div class="fact"><span>Entrou</span><b class="pos">${M(c.ent)}</b></div><div class="fact"><span>Saiu</span><b>${M(c.sai)}</b></div><div class="fact"><span>Investiu</span><b>${M(c.inv)}</b></div><div class="fact"><span>Falta pagar</span><b>${M(falta)}</b></div></div></section>
+    <div class="facts"><div class="fact"><span>Entrou</span><b class="pos">${M(c.ent)}</b></div><div class="fact"><span>Saiu</span><b>${M(c.sai)}</b></div><div class="fact"><span>Investiu</span><b>${M(c.inv)}</b></div><div class="fact"><span>Falta pagar</span><b>${M(falta)}</b></div>${c.recPend > 0 ? `<div class="fact"><span>A receber</span><b class="pos">${M(c.recPend)}</b></div>` : ""}</div></section>
    ${avisosHtml()}<div class="river">${seg_.map(([n, v, col], i) => `<i title="${n}" style="width:${v / base * 100}%;background:${col};animation-delay:${i * 70}ms"></i>`).join("")}</div>
    <div class="legend">${seg_.map(([n, v, col]) => `<span style="--c:${col}">${n} <b class="money">${brl0(v)}</b></span>`).join("")}</div>
    <div class="h"><h2>Linha do tempo</h2></div><div class="tl">${tl}</div>
    <div class="cols"><div><div class="h"><h2>Próximos vencimentos</h2><button class="aside" data-a="nav" data-p="pagar">ver todos →</button></div>${rows || `<p class="empty">Nada pendente.</p>`}</div>
     <div><div class="h"><h2>Para onde foi</h2></div><div class="bars">${bars(topCat, id => cat(id).cor, id => cat(id).n, c.sai) || `<p class="empty">Sem saídas.</p>`}</div></div></div>
-   <div class="cols"><div><div class="h"><h2>Por forma de pagamento</h2></div><div class="bars">${bars(porConta, id => conta(id).cor, id => conta(id).n, c.sai) || `<p class="empty">Sem saídas.</p>`}</div></div>
+   <div class="cols"><div><div class="h"><h2>Por forma de pagamento</h2></div><div class="bars">${bars(porConta, id => conta(id).cor, id => conta(id).n, Object.values(c.porConta).reduce((t, v) => t + v, 0)) || `<p class="empty">Sem saídas.</p>`}</div></div>
     <div><div class="h"><h2>No horizonte</h2></div><p class="sent">${hor || "—"}</p></div></div>`;
 }
 function payRow(x) {
@@ -217,7 +235,7 @@ function pgExtrato() {
   const gl = agrupar === "conta" ? k => conta(k).n : agrupar === "cat" ? k => cat(k).n : k => "Dia " + k;
   const grp = {}; it.forEach(x => (grp[gk(x)] ??= []).push(x));
   const keys = Object.keys(grp).sort(agrupar === "dia" ? (a, b) => b - a : (a, b) => grp[b].reduce((t, x) => t + x.v, 0) - grp[a].reduce((t, x) => t + x.v, 0));
-  const line = x => `<button class="ln" data-a="edit" data-src="${x.src}" data-id="${x.id}"><span class="d">${agrupar === "dia" ? "" : "dia " + x.dia}</span><span style="min-width:0"><span class="t" style="display:block">${esc(x.d)}${x.ev && evento(x.ev) ? `<span class="tag ev">${esc(evento(x.ev).n)}</span>` : ""}${x.tipo === "saida" && !isPaid(cur, x) ? "" : ""}</span><span class="s" style="display:block">${esc(cat(x.cat).n)} · ${esc(conta(x.conta).n)}${x.src === "parc" ? ` · ${x.idx}/${x.n}` : x.src === "rec" ? " · todo mês" : ""}</span></span><span class="v ${x.tipo === "entrada" ? "pos" : ""}">${x.tipo === "entrada" ? "+" : ""}${M(x.v)}</span></button>`;
+  const line = x => `<button class="ln" data-a="edit" data-src="${x.src}" data-id="${x.id}"><span class="d">${agrupar === "dia" ? "" : "dia " + x.dia}</span><span style="min-width:0"><span class="t" style="display:block">${esc(x.d)}${x.ev && evento(x.ev) ? `<span class="tag ev">${esc(evento(x.ev).n)}</span>` : ""}${x.rach?.length ? `<span class="tag">dividido</span>` : ""}</span><span class="s" style="display:block">${esc(cat(x.cat).n)} · ${esc(conta(x.conta).n)}${x.src === "parc" ? ` · ${x.idx}/${x.n}` : x.src === "rec" ? " · todo mês" : ""}</span></span><span class="v ${x.tipo === "entrada" ? "pos" : ""}">${x.tipo === "entrada" ? "+" : ""}${M(x.v)}</span></button>`;
   const totEnt = it.filter(x => x.tipo === "entrada").reduce((t, x) => t + x.v, 0), totSai = it.filter(x => x.tipo === "saida").reduce((t, x) => t + x.v, 0);
   return `<div class="tools"><input class="search" id="busca" type="search" placeholder="Buscar nome, categoria ou cartão" value="${esc(busca)}" aria-label="Buscar">
      <div class="seg">${[["tudo", "Tudo"], ["saida", "Saídas"], ["entrada", "Entradas"], ["aberto", "A pagar"]].map(([k, t]) => `<button data-a="filtro" data-v="${k}" aria-pressed="${filtro === k}">${t}</button>`).join("")}</div>
@@ -230,7 +248,7 @@ function pgExtrato() {
 function pgCarteira() {
   const c = calc(cur), cards = S.contas.filter(a => a.tipo === "credito" && !a.pessoa), others = S.contas.filter(a => a.tipo !== "credito" && !a.pessoa);
   const card = a => { const v = c.porConta[a.id] || 0, paid = !!S.pagos[cur]?.["card:" + a.id]; return `<button class="card ${paid && v ? "paid" : ""}" style="--c:${a.cor};color:${readableOn(a.cor)}" data-a="conta" data-id="${a.id}"><div><div class="k">${paid && v ? "fatura paga" : "vence dia " + (a.venc || (a.fecha ? vencDeFecha(a.fecha) : "?"))}</div><div class="n">${esc(a.n)}</div></div><div><div class="v money num">${brl(v)}</div>${a.limite ? `<div class="lim"><i style="width:${Math.min(100, v / a.limite * 100)}%"></i></div><div class="k" style="margin-top:6px">${Math.round(v / a.limite * 100)}% do limite</div>` : ""}</div></button>`; };
-  const pr = p => { const du = autoDebt(p) + S.dividas.filter(d => d.pessoa === p.id && d.dir === "devo").reduce((t, d) => t + Math.max(0, restante(d)), 0), re = S.dividas.filter(d => d.pessoa === p.id && d.dir === "me_deve").reduce((t, d) => t + Math.max(0, restante(d)), 0), net = re - du;
+  const pr = p => { const du = autoDebt(p) + S.dividas.filter(d => d.pessoa === p.id && d.dir === "devo").reduce((t, d) => t + Math.max(0, restante(d)), 0), re = S.dividas.filter(d => d.pessoa === p.id && d.dir === "me_deve").reduce((t, d) => t + Math.max(0, restante(d)), 0), net = re + recPend(p.id) - du;
     return `<button class="ln person" data-a="pessoa" data-id="${p.id}"><span class="av" style="--c:${p.cor};color:${readableOn(p.cor)}">${esc(p.n[0] || "?")}</span><span><span class="t" style="display:block">${esc(p.n)}</span><span class="s" style="display:block">${net === 0 ? "sem pendências" : net > 0 ? "te deve" : "você deve"}</span></span><span class="v ${net > 0 ? "pos" : net < 0 ? "neg" : ""}">${net === 0 ? "—" : M(Math.abs(net))}</span></button>`; };
   return `<div class="h"><h2>Cartões de crédito</h2><button class="aside" data-a="novaConta">+ novo cartão</button></div>
    ${cards.length ? `<div class="wallet">${cards.map(card).join("")}</div>` : `<p class="empty">Nenhum.</p>`}
@@ -256,6 +274,7 @@ function pessoaSheet(id) {
   const p = pessoa(id), pc = S.contas.find(c => c.pessoa === id), au = autoDebt(p), pago = !!S.pagos[cur]?.["card:" + pc?.id], dv = S.dividas.filter(d => d.pessoa === id);
   openSheet(`<h3>${esc(p.n)}</h3>
    ${pc ? `<div class="h"><h2>Cartão dela em ${label(cur)}</h2><span class="aside">${M(calc(cur).porConta[pc.id] || 0)}</span></div><button class="${pago ? "secondary" : "primary"}" data-a="pay" data-k="card:${pc.id}" data-keep="1">${pago ? "Pago · reabrir" : "Marcar como pago"}</button>` : ""}
+   ${(() => { const rl = calc(cur).recPor[id] || [], rt = rl.reduce((s, x) => s + x.v, 0), got = !!S.pagos[cur]?.["rach:" + id]; return rl.length ? `<div class="h"><h2>Divisão de ${label(cur)}</h2><span class="aside">${M(rt)}</span></div>${rl.map(x => `<div class="ln" style="grid-template-columns:minmax(0,1fr) auto"><span class="t" style="min-width:0">${esc(x.it.d)}${x.it.src === "parc" ? ` <span class="mute">${x.it.idx}/${x.it.n}</span>` : ""}</span><span class="v">${M(x.v)}</span></div>`).join("")}<div class="acts" style="margin-top:12px"><button class="${got ? "secondary" : "primary"}" data-a="recebido" data-id="${id}">${got ? "Recebido · reabrir" : "Marcar como recebido"}</button></div>` : ""; })()}
    <div class="h"><h2>Dívidas</h2></div>
    ${dv.map(d => { const r = restante(d); return `<div class="ln" style="grid-template-columns:minmax(0,1fr) auto"><div><div class="t">${esc(d.d)}</div><div class="s">${d.dir === "me_deve" ? "te deve" : "você deve"} · de ${brl(d.v)}${r <= 0 ? " · quitada" : ""}</div></div><span class="v ${d.dir === "me_deve" ? "pos" : "neg"}">${M(Math.max(r, 0))}</span>
      ${r > 0 ? `<div style="grid-column:1/-1;display:flex;gap:8px;align-items:center"><input class="in" id="pg${d.id}" placeholder="valor pago" inputmode="decimal" style="font-size:15px;max-width:140px"><button class="chip" data-a="pagarDivida" data-id="${d.id}" data-part="1">Registrar</button><button class="chip" data-a="pagarDivida" data-id="${d.id}">Quitar tudo</button></div>` : ""}
@@ -291,7 +310,7 @@ function dividaForm(pid) {
 
 /* ---------- Compromissos ---------- */
 function pgPlano() {
-  const tabs = `<div class="tools"><div class="seg">${[["parc", "Parcelas"], ["rec", "Recorrentes"], ["ev", "Eventos"]].map(([k, t]) => `<button data-a="plano" data-v="${k}" aria-pressed="${plano === k}">${t}</button>`).join("")}</div></div>`;
+  const tabs = `<div class="tools"><div class="seg">${[["parc", "Parcelas"], ["rec", "Recorrentes"], ["ev", "Eventos"], ["div", "Divididos"]].map(([k, t]) => `<button data-a="plano" data-v="${k}" aria-pressed="${plano === k}">${t}</button>`).join("")}</div></div>`;
   if (plano === "parc") {
     const ps = S.parcelas.map(p => { const i = diffM(startM(p), cur) + 1, end = addM(startM(p), p.n - 1), last = p.fim && diffM(p.fim, end) > 0 ? p.fim : end; return { p, i, end: last, done: diffM(cur, last) < 0, fut: i < 1, left: Math.max(0, diffM(cur, last)) }; }).sort((a, b) => a.done - b.done || a.end.localeCompare(b.end));
     const ring = (i, n) => { const f = Math.max(0, Math.min(1, i / n)), r = 17, C = 2 * Math.PI * r; return `<svg class="ring" viewBox="0 0 42 42"><circle cx="21" cy="21" r="${r}" fill="none" stroke="var(--line)" stroke-width="4"/><circle cx="21" cy="21" r="${r}" fill="none" stroke="var(--ink)" stroke-width="4" stroke-dasharray="${C}" stroke-dashoffset="${C * (1 - f)}" transform="rotate(-90 21 21)" stroke-linecap="round"/><text x="21" y="25" text-anchor="middle" font-size="11" font-weight="700" fill="currentColor">${Math.max(0, Math.min(p_n(i, n), n))}</text></svg>`; };
@@ -304,9 +323,18 @@ function pgPlano() {
     const rs = S.recorrentes.map(r => ({ r, on: diffM(r.inicio, cur) >= 0 && (!r.fim || diffM(cur, r.fim) >= 0), end: r.fim && diffM(cur, r.fim) < 0 })).sort((a, b) => b.on - a.on || a.r.tipo.localeCompare(b.r.tipo) || b.r.v - a.r.v);
     return tabs + `` + ["entrada", "invest", "saida"].map(t => { const l = rs.filter(x => x.r.tipo === t); return l.length ? `<div class="h"><h2>${{ entrada: "Entradas", invest: "Investimentos", saida: "Saídas fixas" }[t]}</h2><span class="aside">${M(l.filter(x => x.on).reduce((s, x) => s + x.r.v, 0))}</span></div>${l.map(x => `<button class="ln" data-a="edit" data-src="rec" data-id="${x.r.id}" style="${x.on ? "" : "opacity:.5"}"><span class="d">dia ${x.r.dia || 1}</span><span style="min-width:0"><span class="t" style="display:block">${esc(x.r.d)}${!x.on ? `<span class="tag">${x.end ? "encerrado" : "começa " + short(x.r.inicio)}</span>` : ""}</span><span class="s" style="display:block">${esc(cat(x.r.cat).n)} · ${esc(conta(x.r.conta).n)} · desde ${short(x.r.inicio)}</span></span><span class="v">${M(x.r.v)}</span></button>`).join("")}` : ""; }).join("");
   }
+  if (plano === "div") return tabs + divHtml();
   const evs = (S.eventos || []).map(e => ({ e, s: evStats(e.id) }));
   return tabs + `<div class="h"><h2>Eventos</h2><button class="aside" data-a="novoEvento">+ novo evento</button></div>
    ${evs.map(({ e, s }) => `<button class="ln" data-a="evento" data-id="${e.id}" style="grid-template-columns:minmax(0,1fr) auto"><span><span class="t" style="display:block">${esc(e.n)}</span><span class="s" style="display:block">${s.n} lançamentos${e.orc ? ` · orçamento ${brl0(e.orc)}` : ""}</span></span><span class="v">${M(s.gasto)}</span>${e.orc ? `<div class="bars" style="grid-column:1/-1"><div class="track" style="height:6px;background:var(--paper2);border-radius:3px;overflow:hidden"><i style="display:block;height:100%;width:${Math.min(100, s.gasto / e.orc * 100)}%;background:${s.gasto > e.orc ? "var(--neg)" : "var(--pos)"}"></i></div></div>` : ""}</button>`).join("") || `<p class="empty">Nenhum.</p>`}`;
+}
+function divHtml() {
+  const c = calc(cur), ids = Object.keys(c.recPor);
+  if (!ids.length) return `<p class="empty">Nenhuma divisão em ${label(cur)}.</p>`;
+  return `<p class="lede">A receber em ${label(cur)}: <b class="money">${brl(c.recebe)}</b></p>` + ids.map(id => {
+    const p = pessoa(id), l = c.recPor[id], t = l.reduce((s, x) => s + x.v, 0), got = !!S.pagos[cur]?.["rach:" + id];
+    return `<div class="h"><h2>${esc(p.n)}</h2><span class="aside">${M(t)}</span></div>${l.map(x => `<button class="ln" data-a="edit" data-src="${x.it.src}" data-id="${x.it.id}" style="grid-template-columns:minmax(0,1fr) auto"><span class="t" style="min-width:0">${esc(x.it.d)}${x.it.src === "parc" ? ` <span class="mute">${x.it.idx}/${x.it.n}</span>` : ""}</span><span class="v">${M(x.v)}</span></button>`).join("")}<div class="acts" style="margin-top:12px"><button class="${got ? "secondary" : "primary"}" data-a="recebido" data-id="${id}">${got ? "Recebido · reabrir" : "Marcar como recebido"}</button></div>`;
+  }).join("");
 }
 function evStats(id) {
   let gasto = 0, ent = 0, n = 0; const meses = {};
@@ -418,8 +446,8 @@ function parseSmart(text, F) {
 }
 function lancar(it, src) {
   const edit = !!it, last = S.avulsos[S.avulsos.length - 1];
-  const F = edit ? { src, tipo: it.tipo || "saida", d: it.d, v: fnum(it.v), data: it.data || cur + "-" + pad(it.dia || 1), dia: it.dia || 1, rep: src === "rec" ? "mes" : src === "parc" ? "parc" : "uma", n: it.n || 2, tot: false, cat: it.cat, conta: it.conta, ev: it.ev || "", scope: "all" }
-    : { tipo: "saida", d: "", v: "", data: cur === NOW ? today() : cur + "-01", rep: "uma", n: 2, tot: false, cat: "", conta: last?.conta || S.contas[0].id, ev: "", cal: false, calM: cur };
+  const F = edit ? { src, tipo: it.tipo || "saida", d: it.d, v: fnum(it.v), data: it.data || cur + "-" + pad(it.dia || 1), dia: it.dia || 1, rep: src === "rec" ? "mes" : src === "parc" ? "parc" : "uma", n: it.n || 2, tot: false, cat: it.cat, conta: it.conta, ev: it.ev || "", rach: JSON.parse(JSON.stringify(it.rach || [])), scope: "all" }
+    : { tipo: "saida", d: "", v: "", data: cur === NOW ? today() : cur + "-01", rep: "uma", n: 2, tot: false, cat: "", conta: last?.conta || S.contas[0].id, ev: "", rach: [], cal: false, calM: cur };
   const body = f => {
     const catId = f.cat || guessCat(f.d, f.tipo), cats = S.cats.filter(c => c.tipo === f.tipo), isRec = f.src === "rec", isParc = f.src === "parc", locked = edit;
     const dates = [{ v: today(), l: "Hoje" }, { v: addDays(today(), -1), l: "Ontem" }], dsel = dates.some(d => d.v === f.data);
@@ -434,6 +462,7 @@ function lancar(it, src) {
      ${isParc ? `<p class="note">Parcela ${Math.min(it.n, Math.max(1, diffM(startM(it), cur) + 1))} de ${it.n}${it.fim ? " · quitada" : ""}</p><div class="fld"><span class="lb">Total de parcelas</span><input class="in" data-f="n" value="${f.n}" inputmode="numeric" style="max-width:100px"></div>` : ""}
      ${fld("Categoria", chips("cat", cats.map(c => ({ v: c.id, l: c.n, c: c.cor })), catId))}
      ${fld(f.tipo === "entrada" ? "Entrou em" : "Pago com", chips("conta", S.contas.map(a => ({ v: a.id, l: a.n, c: a.cor })), f.conta))}${isRec && edit ? "" : cardNote(f)}
+     ${rachHtml(f)}
      ${(S.eventos || []).length ? fld("Evento (opcional)", chips("ev", [{ v: "", l: "Nenhum" }, ...S.eventos.map(e => ({ v: e.id, l: e.n }))], f.ev)) : ""}
      ${edit && isRec && diffM(it.inicio, cur) > 0 ? fld("Esta mudança vale", seg("scope", [{ v: "all", l: "Todos os meses" }, { v: "from", l: "A partir de " + label(cur) }], f.scope)) : ""}
      <div class="acts"><button class="primary" data-a="save">${edit ? "Salvar" : "Lançar"}</button><button class="secondary" data-a="x">Cancelar</button>${edit ? `<button class="danger" data-a="del">Excluir</button>` : ""}</div>
@@ -446,14 +475,16 @@ function lancar(it, src) {
   FS.save = () => {
     const f = FS, v = num(f.v); if (!v) { toast("Informe o valor"); return; }
     const s0 = snap(), cid = f.cat || guessCat(f.d, f.tipo), d = f.d.trim() || cat(cid).n, n = Math.max(2, +f.n || 2), ev = f.ev || undefined;
+    const rach = f.tipo === "saida" && f.rach.length ? f.rach.map(r => r.m === "fixo" ? { p: r.p, m: "fixo", v: num(r.vs ?? r.v) } : { p: r.p, m: "igual" }) : undefined;
+    if (rach && shares({ v: f.rep === "parc" && f.tot ? v / n : v, rach }).meu < 0) { toast("Os valores fixos passam do total"); return; }
     const cr = creditCycle(f.conta, f.tipo, f.data), chg = edit && (f.data !== it.data || f.conta !== it.conta);
     if (!edit) {
-      if (f.rep === "uma") S.avulsos.push({ id: uid(), tipo: f.tipo, d, v, cat: cid, conta: f.conta, data: f.data, ev, fat: cr?.fatM });
-      else if (f.rep === "mes") S.recorrentes.push({ id: uid(), tipo: f.tipo, d, v, cat: cid, conta: f.conta, dia: +f.data.slice(8), inicio: cr ? cr.fatM : f.data.slice(0, 7), ev });
-      else S.parcelas.push({ id: uid(), d, v: Math.round((f.tot ? v / n : v) * 100) / 100, n, cat: cid, conta: f.conta, data: f.data, ev, fat: cr?.fatM });
+      if (f.rep === "uma") S.avulsos.push({ id: uid(), tipo: f.tipo, d, v, cat: cid, conta: f.conta, data: f.data, ev, fat: cr?.fatM, rach });
+      else if (f.rep === "mes") S.recorrentes.push({ id: uid(), tipo: f.tipo, d, v, cat: cid, conta: f.conta, dia: +f.data.slice(8), inicio: cr ? cr.fatM : f.data.slice(0, 7), ev, rach });
+      else S.parcelas.push({ id: uid(), d, v: Math.round((f.tot ? v / n : v) * 100) / 100, n, cat: cid, conta: f.conta, data: f.data, ev, fat: cr?.fatM, rach });
       closeSheet(); commit("Lançado ✓" + (cr ? ` · fatura de ${short(cr.fatM)}, vence ${fd(cr.dueDate)}` : ""), s0); return;
     }
-    const o = { d, v, cat: cid, conta: f.conta, ev };
+    const o = { d, v, cat: cid, conta: f.conta, ev, rach };
     if (src === "avulso") { Object.assign(it, o, { data: f.data, tipo: f.tipo }); if (chg) it.fat = cr?.fatM; }
     else if (src === "parc") { Object.assign(it, o, { n }); if (chg) it.fat = cr?.fatM; }
     else { const dia = Math.min(31, Math.max(1, +f.dia || 1)); if (f.scope === "from" && diffM(it.inicio, cur) > 0) { const nr = { ...it, ...o, id: uid(), inicio: cur, dia }; delete nr.fim; const oldFim = it.fim; it.fim = addM(cur, -1); if (oldFim) nr.fim = oldFim; S.recorrentes.push(nr); } else Object.assign(it, o, { dia }); }
@@ -482,6 +513,9 @@ const A = {
   pagarDivida: d => { const dv = S.dividas.find(x => x.id === d.id), s0 = snap(); const v = d.part ? num($("#pg" + d.id)?.value) : restante(dv); if (!v) return; (dv.pagtos ??= []).push({ v: Math.min(v, restante(dv)), data: today() }); Store.save(S); render(false); pessoaSheet(dv.pessoa); toast("Pagamento registrado", s0); },
   delDivida: d => { const dv = S.dividas.find(x => x.id === d.id), s0 = snap(); S.dividas = S.dividas.filter(x => x !== dv); Store.save(S); render(false); pessoaSheet(dv.pessoa); toast("Dívida apagada", s0); },
   tema: d => { S.prefs.theme = d.val; applyTheme(); commit(); },
+  rachTog: d => { const i = FS.rach.findIndex(r => r.p === d.p); if (i >= 0) FS.rach.splice(i, 1); else FS.rach.push({ p: d.p, m: "igual" }); FS.draw(); },
+  rachMode: d => { const r = FS.rach.find(x => x.p === d.p); if (r) r.m = d.m; FS.draw(); },
+  recebido: d => { (S.pagos[cur] ??= {}); const k = "rach:" + d.id; S.pagos[cur][k] = !S.pagos[cur][k]; Store.save(S); const open = !$("#sheet").hidden; render(false); if (open) pessoaSheet(d.id); toast(S.pagos[cur][k] ? "Recebido ✓" : "Reaberto"); },
   cpToggle: d => { if (FS.cp?.f === d.f) FS.cp = null; else { const [h, s, v] = hexToHsv(FS[d.f]); FS.cp = { f: d.f, h, s, v }; } FS.draw(); },
   set: d => { const v = d.val === "true" ? true : d.val === "false" ? false : d.val; FS[d.f] = v; if (FS.cp && FS.cp.f === d.f && /^#/.test(v)) { const [h, s, vv] = hexToHsv(v); Object.assign(FS.cp, { h, s, v: vv }); } FS.onSet?.(d.f); FS.draw(); },
   calm: d => { FS.calM = addM(FS.calM, +d.n); FS.calDir = +d.n > 0 ? "r" : "l"; FS.draw(); FS.calDir = null; },
@@ -511,6 +545,7 @@ document.addEventListener("pointerup", () => { if (cpDrag) { cpDrag = null; FS.d
 document.addEventListener("change", e => { if (FS?.cp && e.target.classList?.contains("cp-hex")) FS.draw(); });
 document.addEventListener("input", e => {
   const t = e.target;
+  if (t.dataset?.rx && FS?.rach) { const r = FS.rach.find(x => x.p === t.dataset.rx); if (r) { r.vs = t.value; r.v = num(t.value); const n = Math.max(2, +FS.n || 2), v = FS.rep === "parc" && FS.tot ? num(FS.v) / n : num(FS.v), el = $("#rxsum"); if (el) el.innerHTML = rxSum(FS, shares({ v, rach: FS.rach })); } return; }
   if (FS?.cp && t.classList?.contains("cp-hex")) { let v = t.value.trim().replace(/^#?/, "#"); if (/^#[0-9a-f]{3}$/i.test(v)) v = "#" + [...v.slice(1)].map(c => c + c).join(""); if (/^#[0-9a-f]{6}$/i.test(v)) { const [h, s, vv] = hexToHsv(v); Object.assign(FS.cp, { h, s, v: vv }); cpPaint(t.closest(".cp"), v.toLowerCase()); } return; } if (t.id === "busca") { busca = t.value; const p = t.selectionStart; render(false); const n = $("#busca"); n.focus(); n.setSelectionRange(p, p); return; }
   if (!FS || !t.dataset.f) return; if (t.dataset.f === "smart") { FS.smart(t.value); return; } FS[t.dataset.f] = t.value;
   if (t.dataset.f === "fecha" || t.dataset.f === "venc") { const fe = $('#fb [data-f="fecha"]'), ve = $('#fb [data-f="venc"]'), F = +FS.fecha, V = +FS.venc; if (fe && ve) { ve.placeholder = F && !V ? vencDeFecha(F) + " (calculado)" : "ex.: 10"; fe.placeholder = V && !F ? fechaDeVenc(V) + " (calculado)" : "ex.: 3"; } }

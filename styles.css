@@ -413,3 +413,9 @@ button.ln:hover,button.ln:focus-visible{background:var(--paper2);box-shadow:-10p
 .cp-row{display:flex;gap:12px;align-items:center}
 .cp-sw{width:44px;height:44px;border-radius:10px;border:1px solid var(--line);flex:none}
 .cp-hex{font-variant-numeric:tabular-nums;letter-spacing:.05em}
+
+/* ===== dividir lançamento ===== */
+.rx{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px 12px;align-items:center;padding:12px 0;border-bottom:1px solid var(--line)}
+.rx .seg button{padding:5px 12px;font-size:13px}
+.rx-v{grid-column:1/-1;max-width:150px;font-size:16px}
+.rx-a{grid-column:1/-1;font:600 16px var(--serif);color:var(--mute)}
