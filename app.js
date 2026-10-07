@@ -49,7 +49,7 @@ function cardCycle(a, date) {
   const antes = d < fecha, bestDate = dstr(ym, fecha), bestDue = dstr(venc > fecha ? addM(ym, 1) : addM(ym, 2), venc);
   return { fecha, venc, estimado: !a.fecha || !a.venc, fatM: dueM, closeDate, dueDate, dias: daysBetween(date, dueDate), antes, bestDate, bestDue, ganho: daysBetween(dueDate, bestDue) };
 }
-const creditCycle = (contaId, tipo, date) => { const a = conta(contaId); return tipo === "saida" && a.tipo === "credito" && date ? cardCycle(a, date) : null; };
+const creditCycle = (contaId, tipo, date) => { const a = conta(contaId); return tipo === "saida" && a.tipo === "credito" && !a.pessoa && date ? cardCycle(a, date) : null; };
 const startFor = f => creditCycle(f.conta, f.tipo, f.data)?.fatM || f.data.slice(0, 7);
 function rachHtml(f) {
   if (f.tipo !== "saida" || !S.pessoas.length) return "";
@@ -489,7 +489,7 @@ function lancar(it, src) {
      ${f.rep === "parc" && !locked ? `<div class="row2">${fld("Parcelas", `<input class="in" data-f="n" value="${f.n}" inputmode="numeric">`)}${fld("O valor é", seg("tot", [{ v: "false", l: "da parcela" }, { v: "true", l: "total" }], f.tot))}</div><p class="note">${v ? `${n}x de <b>${brl(pv)}</b> · a última cai em ${short(addM(startFor(f), n - 1))}` : "Informe o valor."}</p>` : ""}
      ${isParc ? `<p class="note">Parcela ${Math.min(it.n, Math.max(1, diffM(startM(it), cur) + 1))} de ${it.n}${it.fim ? " · quitada" : ""}</p><div class="fld"><span class="lb">Total de parcelas</span><input class="in" data-f="n" value="${f.n}" inputmode="numeric" style="max-width:100px"></div>` : ""}
      ${fld("Categoria", chips("cat", cats.map(c => ({ v: c.id, l: c.n, c: c.cor })), catId))}
-     ${fld(f.tipo === "entrada" ? "Entrou em" : "Pago com", chips("conta", S.contas.map(a => ({ v: a.id, l: a.n, c: a.cor })), f.conta))}${isRec && edit ? "" : cardNote(f)}
+     ${fld(f.tipo === "entrada" ? "Entrou em" : "Pago com", chips("conta", [...S.contas.map(a => ({ v: a.id, l: a.n, c: a.cor })), ...(f.tipo === "entrada" ? [] : S.pessoas.filter(p => !S.contas.some(a => a.pessoa === p.id)).map(p => ({ v: "p:" + p.id, l: p.n + " (pessoa)", c: p.cor })))], f.conta))}${isRec && edit ? "" : cardNote(f)}
      ${rachHtml(f)}
      ${(S.eventos || []).length ? fld("Evento (opcional)", chips("ev", [{ v: "", l: "Nenhum" }, ...S.eventos.map(e => ({ v: e.id, l: e.n }))], f.ev)) : ""}
      ${edit && isRec && diffM(it.inicio, cur) > 0 ? fld("Esta mudança vale", seg("scope", [{ v: "all", l: "Todos os meses" }, { v: "from", l: "A partir de " + label(cur) }], f.scope)) : ""}
@@ -502,7 +502,9 @@ function lancar(it, src) {
   FS.smart = txt => { const keep = { cal: FS.cal, calM: FS.calM }; parseSmart(txt, FS); Object.assign(FS, keep); const c = FS.cat || guessCat(FS.d, FS.tipo); FS.smartMsg = txt.trim() ? `Entendi: <b>${{ saida: "saída", entrada: "entrada", invest: "investimento" }[FS.tipo]}</b>${FS.v ? " · " + brl(num(FS.v)) : ""}${FS.rep === "parc" ? ` · ${FS.n}x` : FS.rep === "mes" ? " · todo mês" : ""} · ${esc(FS.d || "sem nome")} · ${esc(cat(c).n)} · ${esc(conta(FS.conta).n)} · ${fdate(FS.data)}` : ""; FS.draw(); };
   FS.save = () => {
     const f = FS, v = num(f.v); if (!v) { toast("Informe o valor"); return; }
-    const s0 = snap(), cid = f.cat || guessCat(f.d, f.tipo), d = f.d.trim() || cat(cid).n, n = Math.max(2, +f.n || 2), ev = f.ev || undefined;
+    const s0 = snap();
+    if (String(f.conta).startsWith("p:")) { const pp = pessoa(f.conta.slice(2)); const na = { id: uid(), n: pp.n, cor: pp.cor, tipo: "credito", venc: 10, pessoa: pp.id }; S.contas.push(na); f.conta = na.id; }
+    const cid = f.cat || guessCat(f.d, f.tipo), d = f.d.trim() || cat(cid).n, n = Math.max(2, +f.n || 2), ev = f.ev || undefined;
     const rach = f.tipo === "saida" && f.rach.length ? f.rach.map(r => { const sid = pessoa(r.p).amigo ? (r.sid || crypto.randomUUID()) : undefined; return r.m === "fixo" ? { p: r.p, m: "fixo", v: num(r.vs ?? r.v), sid } : { p: r.p, m: "igual", sid }; }) : undefined;
     if (rach && shares({ v: f.rep === "parc" && f.tot ? v / n : v, rach }).meu < 0) { toast("Os valores fixos passam do total"); return; }
     const cr = creditCycle(f.conta, f.tipo, f.data), chg = edit && (f.data !== it.data || f.conta !== it.conta);
