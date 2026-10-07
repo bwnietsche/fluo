@@ -23,7 +23,9 @@ button{cursor:pointer;background:none;border:0}
 .hl{background:linear-gradient(transparent 12%,var(--hi) 12%,var(--hi) 92%,transparent 92%);color:var(--hi-ink);padding:0 .18em;margin:0 -.18em;border-radius:2px}
 
 /* ---------- estrutura ---------- */
-.app{display:grid;grid-template-columns:var(--rail) 1fr;min-height:100vh}
+/* fundo pintado por elementos de verdade: na janela do PWA o Chrome às vezes deixa o fundo da raiz (html/body) preto */
+html,body{background-image:linear-gradient(var(--paper),var(--paper))}
+.app{display:grid;grid-template-columns:var(--rail) 1fr;min-height:100vh;background:var(--paper)}
 .rail{position:sticky;top:0;height:100vh;padding:28px 18px 20px 26px;display:flex;flex-direction:column;border-right:1px solid var(--line)}
 .brand{font:800 30px/1 var(--serif);letter-spacing:-.02em}
 .brand span{display:block;font:500 11px var(--sans);letter-spacing:.14em;text-transform:uppercase;color:var(--mute);margin-top:6px}
