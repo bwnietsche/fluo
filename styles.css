@@ -122,6 +122,12 @@ button.ln:hover,button.ln:focus-visible{background:var(--paper2);box-shadow:-10p
 .chip:hover{border-color:var(--ink)}
 .chip[aria-pressed="true"]{background:var(--ink);color:var(--paper);border-color:var(--ink)}
 .chip i{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:7px;background:var(--c)}
+.chip.sw{width:36px;height:36px;padding:0;border:0;border-radius:50%;background:none;display:grid;place-items:center;transition:box-shadow .15s}
+.chip.sw i{width:26px;height:26px;border-radius:50%;margin:0;transition:transform .15s}
+.chip.sw:hover i{transform:scale(1.12)}
+.chip.sw[aria-pressed="true"]{background:none;box-shadow:inset 0 0 0 2px var(--ink)}
+.chip.swmore{display:inline-flex;align-items:center;height:36px;padding:0 14px;border-radius:18px;margin-left:4px}
+.chip.swmore i{width:14px;height:14px;border-radius:50%}
 .tools{display:flex;gap:14px;flex-wrap:wrap;align-items:center;margin-bottom:6px}
 .search{flex:1;min-width:180px;max-width:360px;border:0;border-bottom:1.5px solid var(--line);background:none;padding:8px 2px;transition:border-color .2s}
 .search:focus{outline:0;border-color:var(--ink)}
@@ -176,12 +182,15 @@ button.ln:hover,button.ln:focus-visible{background:var(--paper2);box-shadow:-10p
 .smart:focus{outline:0;border-color:var(--ink);border-style:solid}
 .preview{margin-top:10px;padding:10px 12px;background:var(--paper2);border-radius:6px;font-size:14px}
 .acts{display:flex;gap:12px;align-items:center;margin-top:30px;flex-wrap:wrap}
+.sheet .panel .acts:not(:has(~ .acts)){position:sticky;bottom:-26px;z-index:2;margin:24px 0 -26px;padding:14px 0 22px;background:var(--raise);border-top:1px solid var(--line)}
 .cal{margin-top:10px;border:1px solid var(--line);border-radius:8px;padding:10px}
 .cal-h{display:flex;justify-content:space-between;align-items:center;font:600 15px var(--serif);margin-bottom:6px}
 .cal-h button{width:30px;height:30px;border-radius:50%}.cal-h button:hover{background:var(--paper2)}
 .cal-g{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;text-align:center}
 .cal-g b{font:600 11px var(--sans);color:var(--mute);padding:4px 0}
 .cal-g button{aspect-ratio:1;border-radius:6px;font-size:14px}
+.daybtn{display:block;width:100%;text-align:left}.daybtn span{color:var(--mute)}.daybtn[aria-pressed="true"]{border-color:var(--ink)}
+.cal.dp{margin:0 0 18px}.cal.dp .aside{margin-top:8px}
 .cal-g button:hover{background:var(--paper2)} .cal-g button[aria-pressed="true"]{background:var(--ink);color:var(--paper)}
 .note{font-size:13px;color:var(--mute);margin-top:8px}
 .toast{position:fixed;left:50%;bottom:28px;transform:translateX(-50%);z-index:30;background:var(--ink);color:var(--paper);padding:11px 16px;border-radius:8px;display:flex;gap:14px;align-items:center;animation:rise .4s var(--ease) both;box-shadow:0 8px 30px -10px rgba(0,0,0,.4)}
@@ -205,6 +214,7 @@ button.ln:hover,button.ln:focus-visible{background:var(--paper2);box-shadow:-10p
   .app{grid-template-columns:1fr}.rail{display:none}
   .dock:not([hidden]){display:grid}
   main{padding-bottom:110px}
+  .subnav{display:flex;flex-wrap:nowrap;margin-bottom:22px}.subnav button{flex:1;padding:9px 4px;white-space:nowrap}
   #add{display:none}
   .h .hint{display:none}
   .mnav .mlabel{white-space:nowrap}
@@ -223,7 +233,7 @@ button.ln:hover,button.ln:focus-visible{background:var(--paper2);box-shadow:-10p
   .ln{grid-template-columns:36px minmax(0,1fr) auto;gap:10px}
   .ln.pay{grid-template-columns:28px 34px minmax(0,1fr) auto}
 }
-@media (min-width:901px){.dock{display:none!important}}
+@media (min-width:901px){.dock,.subnav,#cfg{display:none!important}}
 @media (prefers-reduced-motion:reduce){*{animation-duration:.01ms!important;transition-duration:.01ms!important}}
 
 .view.still *{animation:none!important}

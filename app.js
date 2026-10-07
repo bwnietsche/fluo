@@ -174,6 +174,8 @@ function form(title, st, body, { pre = "", sub = "" } = {}) {
 }
 const chips = (f, opts, val) => `<div class="chips">${opts.map(o => `<button type="button" class="chip" data-a="set" data-f="${f}" data-val="${esc(o.v)}" aria-pressed="${String(val) === String(o.v)}">${o.c ? `<i style="--c:${o.c}"></i>` : ""}${esc(o.l)}</button>`).join("")}</div>`;
 const seg = (f, opts, val) => `<div class="seg">${opts.map(o => `<button type="button" data-a="set" data-f="${f}" data-val="${esc(o.v)}" aria-pressed="${String(val) === String(o.v)}">${esc(o.l)}</button>`).join("")}</div>`;
+const dayBtn = (f, val, ph) => `<button type="button" class="in daybtn" data-a="dpToggle" data-f="${f}" aria-pressed="${FS?.dp === f}">${+val ? "dia " + (+val) : `<span>${ph}</span>`}</button>`;
+const dayGrid = (f, val, clear) => FS?.dp !== f ? "" : `<div class="cal dp"><div class="cal-g">${Array.from({ length: 31 }, (_, i) => `<button type="button" data-a="dpSet" data-f="${f}" data-val="${i + 1}" aria-pressed="${+val === i + 1}">${i + 1}</button>`).join("")}</div>${clear && +val ? `<button type="button" class="aside" data-a="dpSet" data-f="${f}" data-val="">Limpar</button>` : ""}</div>`;
 const fld = (l, inner) => `<div class="fld"><span class="lb">${l}</span>${inner}</div>`;
 /* seletor de cor próprio (nunca o nativo): paleta + "Outra cor" com área saturação/brilho, faixa de matiz e código */
 const hsvToHex = (h, s, v) => { const f = n => { const k = (n + h / 60) % 6, c = v - v * s * Math.max(0, Math.min(k, 4 - k, 1)); return Math.round(c * 255).toString(16).padStart(2, "0"); }; return "#" + f(5) + f(3) + f(1); };
@@ -182,8 +184,8 @@ const readableOn = hex => { const m = /^#?([0-9a-f]{6})$/i.exec(hex || ""); if (
 const cpHtml = val => { const { h, s, v } = FS.cp; return `<div class="cp"><div class="cp-sv" style="--hue:${h}"><i style="left:${s * 100}%;top:${(1 - v) * 100}%"></i></div><div class="cp-h"><i style="left:${h / 360 * 100}%"></i></div><div class="cp-row"><span class="cp-sw" style="background:${esc(val)}"></span><input class="in cp-hex" value="${esc(val)}" maxlength="7" spellcheck="false" autocomplete="off" aria-label="Código da cor"></div></div>`; };
 const colorChips = (f, val) => {
   const open = FS?.cp?.f === f, custom = !PAL.includes(val);
-  const base = chips(f, PAL.map(c => ({ v: c, l: "", c })), val).replace(/class="chip"/g, 'class="chip" style="padding:6px 10px"');
-  const btn = `<button type="button" class="chip" data-a="cpToggle" data-f="${f}" aria-pressed="${custom || open}">${custom ? `<i style="--c:${esc(val)}"></i>` : ""}Outra cor</button>`;
+  const base = chips(f, PAL.map(c => ({ v: c, l: "", c })), val).replace(/class="chip"/g, 'class="chip sw"');
+  const btn = `<button type="button" class="chip swmore" data-a="cpToggle" data-f="${f}" aria-pressed="${custom || open}">${custom ? `<i style="--c:${esc(val)}"></i>` : ""}Outra cor</button>`;
   return base.replace(/<\/div>$/, btn + "</div>") + (open ? cpHtml(val) : "");
 };
 
@@ -440,7 +442,7 @@ function catForm(id) {
 function contaForm(id) {
   const a = id ? conta(id) : null;
   form(a ? "Editar forma de pagamento" : "Nova forma de pagamento", { n: a?.n || "", tipo: a?.tipo || "credito", venc: a?.venc || "", fecha: a?.fecha || "", limite: a?.limite ? fnum(a.limite) : "", cor: a?.cor || PAL[2] }, f => `${fld("Nome", `<input class="in" data-f="n" value="${esc(f.n)}" placeholder="ex.: Nubank" autofocus>`)}${fld("Tipo", seg("tipo", [{ v: "credito", l: "Cartão de crédito" }, { v: "debito", l: "Débito / Pix" }, { v: "boleto", l: "Boleto" }], f.tipo))}
-    ${f.tipo === "credito" ? `<div class="row2">${fld("Fecha dia", `<input class="in" data-f="fecha" value="${esc(f.fecha)}" inputmode="numeric" placeholder="${+f.venc && !+f.fecha ? fechaDeVenc(+f.venc) + " (calculado)" : "ex.: 3"}">`)}${fld("Vence dia", `<input class="in" data-f="venc" value="${esc(f.venc)}" inputmode="numeric" placeholder="${+f.fecha && !+f.venc ? vencDeFecha(+f.fecha) + " (calculado)" : "ex.: 10"}">`)}</div>${fld("Limite", `<input class="in" data-f="limite" value="${esc(f.limite)}" inputmode="decimal">`)}` : ""}${fld("Cor", colorChips("cor", f.cor))}
+    ${f.tipo === "credito" ? `<div class="row2">${fld("Fecha dia", dayBtn("fecha", f.fecha, +f.venc ? "≈ dia " + fechaDeVenc(+f.venc) : "escolher"))}${fld("Vence dia", dayBtn("venc", f.venc, +f.fecha ? "≈ dia " + vencDeFecha(+f.fecha) : "escolher"))}</div>${dayGrid("fecha", f.fecha, 1)}${dayGrid("venc", f.venc, 1)}${fld("Limite", `<input class="in" data-f="limite" value="${esc(f.limite)}" inputmode="decimal">`)}` : ""}${fld("Cor", colorChips("cor", f.cor))}
     <div class="acts"><button class="primary" data-a="save">Salvar</button>${a ? `<button class="danger" data-a="del">Excluir</button>` : ""}</div>`);
   FS.save = () => { if (!FS.n.trim()) return; const s0 = snap(), o = { n: FS.n.trim(), tipo: FS.tipo, cor: FS.cor, venc: FS.tipo === "credito" ? (+FS.venc || undefined) : undefined, fecha: FS.tipo === "credito" ? (+FS.fecha || undefined) : undefined, limite: FS.tipo === "credito" ? (num(FS.limite) || undefined) : undefined }; if (a) Object.assign(a, o); else S.contas.push({ id: uid(), ...o }); closeSheet(); commit("Salvo", s0); };
   FS.del = () => { const s0 = snap(); S.contas = S.contas.filter(x => x.id !== id); closeSheet(); commit("Forma de pagamento excluída", s0); };
@@ -484,7 +486,7 @@ function lancar(it, src) {
      ${edit ? "" : fld("Tipo", seg("tipo", [{ v: "saida", l: "Saída" }, { v: "entrada", l: "Entrada" }, { v: "invest", l: "Investimento" }], f.tipo))}
      <div class="fld"><span class="lb">Valor${f.rep === "parc" && !locked ? (f.tot ? " total" : " da parcela") : ""}</span><input class="in amt" data-f="v" value="${esc(f.v)}" inputmode="decimal" placeholder="0,00" ${edit ? "autofocus" : ""}></div>
      ${fld("Descrição", `<input class="in" data-f="d" value="${esc(f.d)}" placeholder="ex.: Mercado, Salário, Tablet">`)}
-     ${isRec ? fld("Dia do mês", `<input class="in" data-f="dia" value="${f.dia}" inputmode="numeric" style="max-width:100px">`) : isParc ? "" : fld("Quando", `<div class="chips">${dates.map(d => `<button type="button" class="chip" data-a="set" data-f="data" data-val="${d.v}" aria-pressed="${f.data === d.v}">${d.l}</button>`).join("")}<button type="button" class="chip" data-a="set" data-f="cal" data-val="${!f.cal}" aria-pressed="${!dsel || f.cal}">${dsel ? "Outro dia…" : fdate(f.data)}</button></div>${f.cal ? calendar(f) : ""}`)}
+     ${isRec ? fld("Dia do mês", dayBtn("dia", f.dia, "escolher") + dayGrid("dia", f.dia)) : isParc ? "" : fld("Quando", `<div class="chips">${dates.map(d => `<button type="button" class="chip" data-a="set" data-f="data" data-val="${d.v}" aria-pressed="${f.data === d.v}">${d.l}</button>`).join("")}<button type="button" class="chip" data-a="set" data-f="cal" data-val="${!f.cal}" aria-pressed="${!dsel || f.cal}">${dsel ? "Outro dia…" : fdate(f.data)}</button></div>${f.cal ? calendar(f) : ""}`)}
      ${locked ? "" : fld("Repete?", seg("rep", [{ v: "uma", l: "Só esta vez" }, { v: "mes", l: "Todo mês" }, ...(f.tipo === "saida" ? [{ v: "parc", l: "Parcelado" }] : [])], f.rep))}
      ${f.rep === "parc" && !locked ? `<div class="row2">${fld("Parcelas", `<input class="in" data-f="n" value="${f.n}" inputmode="numeric">`)}${fld("O valor é", seg("tot", [{ v: "false", l: "da parcela" }, { v: "true", l: "total" }], f.tot))}</div><p class="note">${v ? `${n}x de <b>${brl(pv)}</b> · a última cai em ${short(addM(startFor(f), n - 1))}` : "Informe o valor."}</p>` : ""}
      ${isParc ? `<p class="note">Parcela ${Math.min(it.n, Math.max(1, diffM(startM(it), cur) + 1))} de ${it.n}${it.fim ? " · quitada" : ""}</p><div class="fld"><span class="lb">Total de parcelas</span><input class="in" data-f="n" value="${f.n}" inputmode="numeric" style="max-width:100px"></div>` : ""}
@@ -644,6 +646,8 @@ const A = {
   amigoResp: async d => { try { await Social.respond(d.id, !!d.ok); toast(d.ok ? "Amigo adicionado" : "Pedido recusado"); } catch (e) { toast("Não foi possível responder."); } refreshSocial(); },
   amigoDel: async d => { try { await Social.remove(d.id); } catch (e) {} refreshSocial(); },
   amigoRem: d => { confirmFn = async () => { const f = FR.friends.find(x => x.uid === d.uid); if (!f) return; try { await Social.remove(f.id); toast("Amizade desfeita"); } catch (e) { toast("Não foi possível desfazer."); } refreshSocial(); }; openSheet(`<h3>Desfazer amizade?</h3><p class="lede">As divisões compartilhadas entre vocês deixam de aparecer para os dois.</p><div class="acts"><button class="primary" data-a="confirmYes" style="background:var(--neg)">Desfazer amizade</button><button class="secondary" data-a="x">Cancelar</button></div>`); },
+  dpToggle: d => { FS.dp = FS.dp === d.f ? null : d.f; FS.draw(); },
+  dpSet: d => { FS[d.f] = d.val; FS.dp = null; FS.draw(); },
   cpToggle: d => { if (FS.cp?.f === d.f) FS.cp = null; else { const [h, s, v] = hexToHsv(FS[d.f]); FS.cp = { f: d.f, h, s, v }; } FS.draw(); },
   set: d => { const v = d.val === "true" ? true : d.val === "false" ? false : d.val; FS[d.f] = v; if (FS.cp && FS.cp.f === d.f && /^#/.test(v)) { const [h, s, vv] = hexToHsv(v); Object.assign(FS.cp, { h, s, v: vv }); } FS.onSet?.(d.f); FS.draw(); },
   calm: d => { FS.calM = addM(FS.calM, +d.n); FS.calDir = +d.n > 0 ? "r" : "l"; FS.draw(); FS.calDir = null; },
@@ -713,10 +717,13 @@ function render(anim = true) {
   const p = PAGES.find(x => x[0] === page) || PAGES[0], v = $("#view"), y = scrollY, same = lastPage === page;
   const oldNums = same ? numEls(v).map(parseMoney) : [], oldBars = BARS.map(([sel, prop]) => same ? [...v.querySelectorAll(sel)].map(e => e.style[prop]) : []), tlOld = v.querySelector(".tl")?.scrollLeft;
   $("#nav").innerHTML = PAGES.map(([k, t]) => `<button data-a="nav" data-p="${k}" ${k === page ? 'aria-current="page"' : ""}><span>${t}${k === "ajustes" && FR.friends.some(f => f.status === "pending" && !f.mine) ? '<i class="dot"></i>' : ""}</span></button>`).join("");
-  $("#dock").innerHTML = `<button data-a="nav" data-p="inicio" ${page === "inicio" ? 'aria-current="page"' : ""}>Início</button><button data-a="nav" data-p="pagar" ${page === "pagar" ? 'aria-current="page"' : ""}>Pagar</button><button class="plus" id="dockAdd" aria-label="Lançar" data-a="lancar">+</button><button data-a="nav" data-p="extrato" ${page === "extrato" ? 'aria-current="page"' : ""}>Extrato</button><button data-a="mais" ${["carteira", "plano", "futuro", "ajustes"].includes(page) ? 'aria-current="page"' : ""}>Mais</button>`;
+  const grp = ["pagar", "plano", "futuro"], dk = (p, t, on) => `<button data-a="nav" data-p="${p}" ${on ? 'aria-current="page"' : ""}>${t}</button>`;
+  $("#dock").innerHTML = dk("inicio", "Início", page === "inicio") + dk("pagar", "Contas", grp.includes(page)) + `<button class="plus" id="dockAdd" aria-label="Lançar" data-a="lancar">+</button>` + dk("extrato", "Extrato", page === "extrato") + dk("carteira", "Carteira", page === "carteira");
+  $("#cfg").setAttribute("aria-pressed", page === "ajustes");
+  const subnav = grp.includes(page) ? `<div class="seg subnav">${[["pagar", "A pagar"], ["plano", "Compromissos"], ["futuro", "Futuro"]].map(([k, t]) => `<button data-a="nav" data-p="${k}" aria-pressed="${page === k}">${t}</button>`).join("")}</div>` : "";
   $("#mlabel").textContent = label(cur); $("#mlabel").title = cur === NOW ? "Mês atual" : "Voltar para o mês atual"; $("#today").hidden = cur === NOW;
   const keepAnim = anim && !same;
-  v.className = "view" + (keepAnim ? " rise" : " still"); v.innerHTML = `<div>${p[2]()}</div>`;
+  v.className = "view" + (keepAnim ? " rise" : " still"); v.innerHTML = `<div>${subnav}${p[2]()}</div>`;
   if (keepAnim) scrollTo(0, 0); else scrollTo(0, y);
   const tl = v.querySelector(".tl"); if (tl && same && tlOld != null) tl.scrollLeft = tlOld;
   const sel = tl?.querySelector('[aria-current="true"]'); if (sel) { const l = sel.offsetLeft - tl.offsetLeft; if (l < tl.scrollLeft) tl.scrollLeft = l - 8; else if (l + sel.offsetWidth > tl.scrollLeft + tl.clientWidth) tl.scrollLeft = l + sel.offsetWidth - tl.clientWidth + 8; }
@@ -747,6 +754,7 @@ A.avisosOn = async () => {
 addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && S) pushNotices(); });
 $("#prev").onclick = () => { cur = addM(cur, -1); futSel = null; render(false); }; $("#next").onclick = () => { cur = addM(cur, 1); futSel = null; render(false); }; $("#mlabel").onclick = $("#today").onclick = () => { cur = NOW; futSel = null; render(false); };
 $("#add").onclick = () => lancar();
+$("#cfg").onclick = () => A.nav({ p: "ajustes" });
 $("#eye").onclick = () => { S.prefs.priv = !S.prefs.priv; applyTheme(); Store.save(S); render(false); };
 Store.onStatus(s => { if (s === "err") setTimeout(() => Store.flush(), 8000); if (s === "conflict") Store.reload().then(st => { S = st; render(false); toast("Seus dados mudaram em outro aparelho. Atualizei."); }); const el = $("#sync"); el.className = "sync " + s; el.textContent = { busy: "salvando…", ok: "salvo", err: "sem conexão — tentando de novo", conflict: "outro aparelho salvou: recarregue" }[s] || s; });
 
